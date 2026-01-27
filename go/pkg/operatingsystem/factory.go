@@ -1,0 +1,120 @@
+package operatingsystem
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+
+	"github.com/archbottle/device-detector/pkg/clienthints"
+	"github.com/archbottle/device-detector/pkg/common"
+	"gopkg.in/yaml.v3"
+)
+
+// ParserFactory holds pre-compiled regexes and creates Parser instances.
+// Thread-safe for concurrent use - create once, use from multiple goroutines.
+type ParserFactory struct {
+	entries []Entry
+
+	// Pointer view used by shared list DB/index.
+	patterns []*Entry
+
+	// Shared list DB (index + mode).
+	db *common.YAMLListDB[*Entry]
+}
+
+// NewParserFactory creates a factory by loading and compiling regexes from YAML files.
+func NewParserFactory(ossPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
+	// Load OS entries
+	data, err := os.ReadFile(ossPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading oss regexes file: %w", err)
+	}
+
+	var entries []Entry
+	if err := yaml.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("parsing oss regexes YAML: %w", err)
+	}
+
+	for i := range entries {
+		entries[i].orderIdx = i
+	}
+
+	f := &ParserFactory{entries: entries}
+	f.patterns = make([]*Entry, len(f.entries))
+	for i := range f.entries {
+		f.patterns[i] = &f.entries[i]
+	}
+
+	db, err := common.NewYAMLListDB(f.patterns, func(e *Entry) error {
+		if e == nil || e.Regex == "" {
+			return nil
+		}
+		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
+		re, compileErr := common.CompileRegexSubmatch(wrapped)
+		if compileErr != nil {
+			return fmt.Errorf("compiling OS pattern (%s): %w", e.Name, compileErr)
+		}
+		e.compiled = re
+
+		// Compile version sub-patterns
+		for i := range e.Versions {
+			if e.Versions[i].Regex == "" {
+				continue
+			}
+			vWrapped := common.WrapDeviceDetectorPattern(e.Versions[i].Regex)
+			vRe, vErr := common.CompileRegexSubmatch(vWrapped)
+			if vErr != nil {
+				return fmt.Errorf("compiling OS version pattern (%s / %s): %w", e.Name, e.Versions[i].Regex, vErr)
+			}
+			e.Versions[i].compiled = vRe
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return nil, err
+	}
+	f.db = db
+
+	return f, nil
+}
+
+// NewDefaultParserFactory creates a factory using the repo-local YAML paths.
+func NewDefaultParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return nil, fmt.Errorf("failed to get caller info")
+	}
+
+	baseDir := filepath.Join(filepath.Dir(filename), "..", "..", "regexes")
+	ossPath := filepath.Join(baseDir, "oss.yml")
+
+	return NewParserFactory(ossPath, opts...)
+}
+
+// NewParser creates a new Parser instance for parsing a single user agent.
+func (f *ParserFactory) NewParser(ua string, opts ...Option) *Parser {
+	p := &Parser{
+		factory:   f,
+		userAgent: ua,
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+// Parse is a convenience method that creates a parser and immediately parses.
+func (f *ParserFactory) Parse(ua string, opts ...Option) *Match {
+	return f.NewParser(ua, opts...).Parse()
+}
+
+// Option is a functional option for configuring Parser behavior.
+type Option func(*Parser)
+
+// WithClientHints sets client hints for the parser.
+func WithClientHints(ch *clienthints.ClientHints) Option {
+	return func(p *Parser) {
+		p.clientHints = ch
+	}
+}

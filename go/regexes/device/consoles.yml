@@ -78,4 +78,3 @@ Retroid Pocket:
       model: '4 Pro'
     - regex: 'Pocket ([235])'
       model: '$1'
-

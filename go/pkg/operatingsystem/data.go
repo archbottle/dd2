@@ -114,9 +114,11 @@ var OperatingSystems = map[string]string{
 	"OVS": "OpenVMS",
 	"OVZ": "OpenVZ",
 	"OWR": "OpenWrt",
+	"OSS": "openSUSE",
 	"OTV": "Opera TV",
 	"ORA": "Oracle Linux",
 	"ORD": "Ordissimo",
+	"ORS": "Orsay",
 	"PAR": "Pardus",
 	"PCL": "PCLinuxOS",
 	"PIC": "PICO OS",
@@ -217,6 +219,7 @@ var OSFamilies = map[string][]string{
 	"GNU/Linux": {
 		"LIN", "ARL", "DEB", "KNO", "MIN", "UBT", "KBT", "XBT", "LBT", "FED",
 		"RHT", "VLN", "MDR", "GNT", "SAB", "SLW", "SSE", "CES", "BTR", "SAF",
+		"OSS",
 		"ORD", "TOS", "RSO", "DEE", "FRE", "MAG", "FEN", "CAI", "PCL", "HAS",
 		"LOS", "DVK", "ROK", "OWR", "OTV", "KTV", "PUR", "PLA", "FUC", "PAR",
 		"FOR", "MON", "KAN", "ZEN", "LND", "LNS", "CHN", "AMZ", "TEN", "CST",
@@ -238,7 +241,7 @@ var OSFamilies = map[string][]string{
 	"WebTV":          {"WTV"},
 	"Windows":        {"WIN"},
 	"Windows Mobile": {"WPH", "WMO", "WCE", "WRT", "WIO", "KIN"},
-	"Other Smart TV": {"WHS", "TIT"},
+	"Other Smart TV": {"WHS", "TIT", "ORS"},
 }
 
 // ClientHintMapping maps OS names to known client hint values.

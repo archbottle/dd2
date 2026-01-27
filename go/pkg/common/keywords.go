@@ -11,9 +11,19 @@ import (
 func ExtractKeywords(pattern string) []string {
 	keywords := []string{}
 
+	normalizeKeyword := func(s string) string {
+		// Keywords are only used for candidate indexing, so we can safely normalize
+		// away leading/trailing whitespace that commonly appears in regex literals.
+		// This fixes cases like `Arch ?Linux` where the extracted literal becomes `Arch `
+		// (trailing space) and would otherwise never match `ArchLinux` in the UA.
+		s = strings.TrimSpace(s)
+		return s
+	}
+
 	// Strategy 1: Find literal strings (not inside character classes or groups)
 	literals := extractLiterals(pattern)
 	for _, lit := range literals {
+		lit = normalizeKeyword(lit)
 		// Only use keywords that are at least 3 chars and meaningful
 		if len(lit) >= 3 && IsUsefulKeyword(lit) {
 			keywords = append(keywords, lit)
@@ -26,6 +36,7 @@ func ExtractKeywords(pattern string) []string {
 		for _, branch := range branches {
 			branchKeywords := extractLiterals(branch)
 			for _, kw := range branchKeywords {
+				kw = normalizeKeyword(kw)
 				if len(kw) >= 3 && IsUsefulKeyword(kw) {
 					// Only add if not already present
 					found := false

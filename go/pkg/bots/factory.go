@@ -18,7 +18,9 @@ type ParserFactory struct {
 	index *common.PatternIndex[*BotEntry]
 
 	// Pre-compiled regexes (RE2 or regexp2) hidden behind a single interface.
-	compiled map[string]common.UniversalRegex
+	// Bots require capture groups for name templating (e.g. "$1"), so we store a
+	// submatch-capable regex.
+	compiled map[string]common.UniversalRegexSubmatch
 }
 
 // NewParserFactory creates a factory by loading and compiling regexes from a YAML file.
@@ -36,7 +38,7 @@ func NewParserFactory(regexesPath string) (*ParserFactory, error) {
 
 	f := &ParserFactory{
 		regexes:  entries,
-		compiled: make(map[string]common.UniversalRegex),
+		compiled: make(map[string]common.UniversalRegexSubmatch),
 	}
 
 	// Build keyword index for fast candidate lookup
@@ -76,7 +78,7 @@ func (f *ParserFactory) compileAll() error {
 func (f *ParserFactory) compilePattern(pattern string) error {
 	wrapped := wrapPattern(pattern)
 
-	re, err := common.CompileRegex(wrapped)
+	re, err := common.CompileRegexSubmatch(wrapped)
 	if err != nil {
 		return fmt.Errorf("compiling pattern %q: %w", pattern, err)
 	}

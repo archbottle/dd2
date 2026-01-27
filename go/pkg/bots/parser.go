@@ -1,5 +1,10 @@
 package bots
 
+import (
+	"strconv"
+	"strings"
+)
+
 // Parser parses a single user agent for bot information.
 // Created via ParserFactory.NewParser() - do not instantiate directly.
 type Parser struct {
@@ -36,7 +41,7 @@ func (p *Parser) Parse() *BotMatch {
 	if p.discardDetails {
 		candidates := p.factory.index.FindCandidates(p.userAgent)
 		for _, entry := range candidates {
-			if p.matchPattern(entry.Regex) {
+			if _, ok := p.matchPattern(entry.Regex); ok {
 				return &BotMatch{Name: "true"} // Indicates "is bot" without details
 			}
 		}
@@ -48,9 +53,14 @@ func (p *Parser) Parse() *BotMatch {
 
 	// Regex match only on candidates (typically 1-10 patterns)
 	for _, entry := range candidates {
-		if p.matchPattern(entry.Regex) {
+		matches, ok := p.matchPattern(entry.Regex)
+		if ok {
+			name := entry.Name
+			if name != "" && matches != nil {
+				name = buildByMatch(name, matches)
+			}
 			return &BotMatch{
-				Name:     entry.Name,
+				Name:     name,
 				Category: entry.Category,
 				URL:      entry.URL,
 				Producer: entry.Producer,
@@ -61,17 +71,32 @@ func (p *Parser) Parse() *BotMatch {
 	return nil
 }
 
-// matchPattern checks if the user agent matches a pattern.
-func (p *Parser) matchPattern(pattern string) bool {
+// matchPattern checks if the user agent matches a pattern and returns submatches.
+// If there is a match, matches[0] is the full match and matches[1..] are capture groups.
+func (p *Parser) matchPattern(pattern string) ([]string, bool) {
 	re, ok := p.factory.compiled[pattern]
 	if !ok || re == nil {
-		return false
+		return nil, false
 	}
-	match, err := re.MatchString(p.userAgent)
-	return err == nil && match
+	matches, err := re.FindStringSubmatch(p.userAgent)
+	return matches, err == nil && matches != nil
 }
 
 // IsBot returns true if the user agent is detected as a bot.
 func (p *Parser) IsBot() bool {
 	return p.Parse() != nil
+}
+
+// buildByMatch replaces $1..$n placeholders with capture group values.
+// Matches follow Go's FindStringSubmatch convention: [0]=full match, [1..]=groups.
+func buildByMatch(template string, matches []string) string {
+	if template == "" || !strings.Contains(template, "$") || len(matches) <= 1 {
+		return strings.TrimSpace(template)
+	}
+
+	args := make([]string, 0, (len(matches)-1)*2)
+	for i := 1; i < len(matches); i++ {
+		args = append(args, "$"+strconv.Itoa(i), matches[i])
+	}
+	return strings.TrimSpace(strings.NewReplacer(args...).Replace(template))
 }

@@ -1,0 +1,2657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Detector Compatibility Report</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+        .header .meta { color: #666; font-size: 14px; }
+        .overall-stats {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-box {
+            text-align: center;
+            padding: 16px 24px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            min-width: 120px;
+        }
+        .stat-box .value { font-size: 32px; font-weight: 700; }
+        .stat-box .label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-box.success .value { color: #22863a; }
+        .stat-box.failure .value { color: #cb2431; }
+        .stat-box.neutral .value { color: #0366d6; }
+        .progress-container { flex: 1; min-width: 200px; }
+        .progress-bar {
+            height: 24px;
+            background: #e1e4e8;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22863a, #28a745);
+            border-radius: 12px;
+        }
+        .progress-text { font-size: 14px; color: #666; }
+        .parser-section {
+            background: #fff;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .parser-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 1px solid #e1e4e8;
+        }
+        .parser-header:hover { background: #f8f9fa; }
+        .parser-title { display: flex; align-items: center; gap: 12px; }
+        .parser-title h3 { font-size: 16px; font-weight: 600; }
+        .parser-stats { display: flex; gap: 16px; align-items: center; }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge.pass { background: #dcffe4; color: #22863a; }
+        .badge.fail { background: #ffeef0; color: #cb2431; }
+        .badge.pct { background: #f1f8ff; color: #0366d6; }
+        .toggle-icon {
+            font-size: 12px;
+            color: #666;
+            transition: transform 0.2s ease;
+        }
+        .parser-section.expanded .toggle-icon { transform: rotate(180deg); }
+        .failures-list { display: none; padding: 0; }
+        .parser-section.expanded .failures-list { display: block; }
+        .failure-item {
+            border-bottom: 1px solid #e1e4e8;
+            padding: 16px 20px;
+        }
+        .failure-item:last-child { border-bottom: none; }
+        .failure-item:hover { background: #fafbfc; }
+        .failure-header {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .ua-string {
+            font-family: "SF Mono", Monaco, "Courier New", monospace;
+            font-size: 12px;
+            background: #f6f8fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            word-break: break-all;
+            color: #24292e;
+        }
+        .diff-table {
+            width: 100%;
+            font-size: 13px;
+            border-collapse: collapse;
+        }
+        .diff-table th {
+            text-align: left;
+            padding: 6px 12px;
+            background: #f6f8fa;
+            font-weight: 500;
+            border: 1px solid #e1e4e8;
+        }
+        .diff-table td {
+            padding: 6px 12px;
+            border: 1px solid #e1e4e8;
+        }
+        .diff-table .field { font-weight: 500; width: 120px; }
+        .diff-table .expected { background: #dcffe4; }
+        .diff-table .actual { background: #ffeef0; }
+        .diff-table .match { background: #fff; }
+        .all-passed {
+            padding: 20px;
+            color: #22863a;
+            text-align: center;
+            font-style: italic;
+        }
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .stat-row { flex-direction: column; align-items: stretch; }
+            .stat-box { min-width: auto; }
+            .parser-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .parser-stats { width: 100%; justify-content: space-between; }
+            .diff-table { font-size: 11px; }
+            .diff-table th, .diff-table td { padding: 4px 8px; }
+            .ua-string { font-size: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Device Detector Compatibility Report</h1>
+            <div class="meta">Generated: 2026-01-28 00:11:05 CET | Go Implementation vs PHP Reference</div>
+        </div>
+
+        <div class="overall-stats">
+            <div class="stat-row">
+                <div class="stat-box neutral">
+                    <div class="value">5787</div>
+                    <div class="label">Total Tests</div>
+                </div>
+                <div class="stat-box success">
+                    <div class="value">5747</div>
+                    <div class="label">Passed</div>
+                </div>
+                <div class="stat-box failure">
+                    <div class="value">40</div>
+                    <div class="label">Failed</div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 99.3%"></div>
+                    </div>
+                    <div class="progress-text">99.3% Compatible</div>
+                </div>
+            </div>
+        </div>
+
+        
+        <div class="parser-section expanded">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Bot</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">99.9%</span>
+                    <span class="badge pass">1258 passed</span>
+                    <span class="badge fail">1 failed</span>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #1057</div>
+                    <div class="ua-string">Mozilla/5.0 (compatible)</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Detected</td>
+                            
+                            <td class="expected">true</td>
+                            <td class="actual">false</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Generic Bot</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                
+            </div>
+        </div>
+        
+        <div class="parser-section expanded">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Browser</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">99.5%</span>
+                    <span class="badge pass">1128 passed</span>
+                    <span class="badge fail">6 failed</span>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #331</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 13_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">Safari</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #484</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; U; Android 11; zh-CN; TECNO LE7 Build/MRA58K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 HiBrowser/2.3.013 UWS/ Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Hi Browser</td>
+                            <td class="actual">Chrome Webview</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">2.3.013</td>
+                            <td class="actual">57.0.2987.108</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">Blink</td>
+                            <td class="match">Blink</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">57.0.2987.108</td>
+                            <td class="match">57.0.2987.108</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Chrome</td>
+                            <td class="match">Chrome</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #893</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 13_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">Safari</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #894</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 16_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery Dawn</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">Safari</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #895</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 16_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery Private Browser</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">Safari</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #1088</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; Android 15; SM-S911B Build/AP3A.240905.015.A2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.155 Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Opera GX</td>
+                            <td class="actual">Chrome Webview</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">3.0.2.2237</td>
+                            <td class="actual">140.0.7339.155</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">Blink</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">140.0.7339.155</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Opera</td>
+                            <td class="actual">Chrome</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                
+            </div>
+        </div>
+        
+        <div class="parser-section expanded">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Operating System</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">96.7%</span>
+                    <span class="badge pass">770 passed</span>
+                    <span class="badge fail">26 failed</span>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #18</div>
+                    <div class="ua-string">Mozilla/4.77 [en] (X11; I; IRIX;64 6.5 IP30)</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">IRIX</td>
+                            <td class="match">IRIX</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="match">IRI</td>
+                            <td class="match">IRI</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">6.5</td>
+                            <td class="match">6.5</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="expected">x64</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Unix</td>
+                            <td class="match">Unix</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #269</div>
+                    <div class="ua-string">Microsoft Office OneNote/16.0.12527.21294 (Windows/10.0; Desktop x86; es-MX; Desktop app; Acer/Aspire SW5-012)</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Windows</td>
+                            <td class="match">Windows</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="match">WIN</td>
+                            <td class="match">WIN</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">10.0</td>
+                            <td class="actual">10</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x86</td>
+                            <td class="match">x86</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Windows</td>
+                            <td class="match">Windows</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #445</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; Android 10; HarmonyOS; MGA-AL00; HMSCore 6.7.0.302) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.105 HuaweiBrowser/12.1.3.303 Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">HarmonyOS</td>
+                            <td class="match">HarmonyOS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">HAR</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #526</div>
+                    <div class="ua-string">Mozilla/5.0 (X11; Linux x86_64; PICO 4 OS5.4.0 like Quest) AppleWebKit/537.36 (KHTML, like Gecko) PicoBrowser/3.3.22 Chrome/105.0.5195.68 VR Safari/537.36  OculusBrowser/7.0</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">PICO OS</td>
+                            <td class="match">PICO OS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">PIC</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">5.4.0</td>
+                            <td class="match">5.4.0</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x64</td>
+                            <td class="match">x64</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #615</div>
+                    <div class="ua-string">Mozilla/5.0 (X11; U; Linux i686; ko-KP, en; rv:1.8.1.8) Gecko/20090718 《붉은별》/2.5 NaenaraBrowser/2.0.0.8</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Red Star</td>
+                            <td class="actual">GNU/Linux</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">RST</td>
+                            <td class="actual">LIN</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x86</td>
+                            <td class="match">x86</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">GNU/Linux</td>
+                            <td class="match">GNU/Linux</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #630</div>
+                    <div class="ua-string">Mozilla/4.08 (PDA; SL-C860/1.40,Qtopia/1.5.4) NetFront/3.1 480x640</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Qtopia</td>
+                            <td class="match">Qtopia</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="match">QTP</td>
+                            <td class="match">QTP</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">1.5.4</td>
+                            <td class="match">1.5.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">x64</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">GNU/Linux</td>
+                            <td class="match">GNU/Linux</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #656</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">LeafOS</td>
+                            <td class="match">LeafOS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">LEA</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">ARM</td>
+                            <td class="match">ARM</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #692</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; Android 11; AFTT) AppleWebKit/537.36 (KHTML, like Gecko) Silk/122.3.1 like Chrome/122.0.6261.160 Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Fire OS</td>
+                            <td class="match">Fire OS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">FIR</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">8</td>
+                            <td class="match">8</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #740</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; U; Android 7.1.2; zh-cn; OC106 Build/N2G47H) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.132 MQQBrowser/8.9 Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Smartisan OS</td>
+                            <td class="actual">Android</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">SMA</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">6.0</td>
+                            <td class="actual">7.1.2</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #741</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; U; Android 8.1.0; zh-cn; OE106 Build/OPM1.171019.026) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/66.0.3359.126 MQQBrowser/10.3 Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Smartisan OS</td>
+                            <td class="actual">Android</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">SMA</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">6.0</td>
+                            <td class="actual">8.1.0</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #746</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; Android 6.0.1; SM919 Build/MXB48T; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/53.0.2785.49 Mobile MQQBrowser/6.2 TBS/043024 Safari/537.36 MicroMessenger/6.5.4.1000 NetType/WIFI Language/zh_CN</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Smartisan OS</td>
+                            <td class="actual">Android</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">SMA</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">3.0</td>
+                            <td class="actual">6.0.1</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #747</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; Android 5.1.1; SM801 Build/LMY47V; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/53.0.2785.49 Mobile MQQBrowser/6.2 TBS/043024 Safari/537.36 MicroMessenger/6.5.4.1000 NetType/4G Language/zh_CN</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Smartisan OS</td>
+                            <td class="actual">Android</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">SMA</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">2.5</td>
+                            <td class="actual">5.1.1</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #749</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; U; Android 4.4.2; zh-cn; SM701 Build/SANFRANCISCO) AppleWebKit/533.1 (KHTML, like Gecko)Version/4.0 MQQBrowser/5.4 TBS/025469 Mobile Safari/533.1 MicroMessenger/6.2.5.49_r7ead8bf.620 NetType/WIFI Language/zh_CN QQ/6.6.0.2935</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Smartisan OS</td>
+                            <td class="actual">Android</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">SMA</td>
+                            <td class="actual">AND</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">1.5</td>
+                            <td class="actual">4.4.2</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="match">Android</td>
+                            <td class="match">Android</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #778</div>
+                    <div class="ua-string">Mozilla/5.0 (X11; BSD Four) AppleWebKit/534.34 (KHTML, like Gecko) Qt/4.8.5 Safari/534.34</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">BSD</td>
+                            <td class="match">BSD</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">BS1</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">4</td>
+                            <td class="match">4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Unix</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #784</div>
+                    <div class="ua-string">Opera/9.80 (SpreadTrum; Opera Mini/4.4.31227/191.268; U; en) Presto/2.12.423 Version/12.16</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Mocor OS</td>
+                            <td class="match">Mocor OS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">MOS</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Real-time OS</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #785</div>
+                    <div class="ua-string">Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/604.1 (KHTML, like Gecko) Version/11.0 Safari/604.1 elementary OS/0.4 (Loki) Epiphany/3.18.11</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">elementary OS</td>
+                            <td class="match">elementary OS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">ELM</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">0.4</td>
+                            <td class="match">0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x64</td>
+                            <td class="match">x64</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">GNU/Linux</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #786</div>
+                    <div class="ua-string">Mozilla/5.0 (X11; GhostBSD/10.3; x86_64; rv:50.0.1) Gecko/20100101 Firefox/50.0.1</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">GhostBSD</td>
+                            <td class="match">GhostBSD</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">GHO</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">10.3</td>
+                            <td class="match">10.3</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x64</td>
+                            <td class="match">x64</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Unix</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #787</div>
+                    <div class="ua-string">Mozilla/5.0 (OS/2; ArcaOS 5.0.6; x86_64; rv:89.0) Gecko/20100101 Firefox/89.0</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">ArcaOS</td>
+                            <td class="match">ArcaOS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">ARC</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">5.0.6</td>
+                            <td class="match">5.0.6</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x64</td>
+                            <td class="match">x64</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">IBM</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #788</div>
+                    <div class="ua-string">Mozilla/5.0 (OS/2; ArcaOS; x64; rv:89.0) Gecko/20100101 Firefox/89.0</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">ArcaOS</td>
+                            <td class="match">ArcaOS</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">ARC</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x64</td>
+                            <td class="match">x64</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">IBM</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #789</div>
+                    <div class="ua-string">Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9b5pre) Gecko/2008032619 Linpus/3.0-0.49</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Linpus</td>
+                            <td class="match">Linpus</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">LPU</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">3.0</td>
+                            <td class="match">3.0</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match">x86</td>
+                            <td class="match">x86</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">GNU/Linux</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #790</div>
+                    <div class="ua-string">NCSA_Mosaic/5.0 (X11;Plan 9 4.0)</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Plan 9</td>
+                            <td class="match">Plan 9</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">PLN</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">4.0</td>
+                            <td class="match">4.0</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Unix</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #791</div>
+                    <div class="ua-string">Mozilla/5.0 (X11; Original ; Minix 3.3 ; rv:3.0)</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">MINIX</td>
+                            <td class="match">MINIX</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">MNX</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">3.3</td>
+                            <td class="match">3.3</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Unix</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #792</div>
+                    <div class="ua-string">Contiki/1.0 (Commodore 64; http://dunkels.com/adam/contiki/)</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Contiki</td>
+                            <td class="match">Contiki</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">CON</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">1.0</td>
+                            <td class="match">1.0</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Other Mobile</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #793</div>
+                    <div class="ua-string">Contiki/1.2-pre0 http://dunkels.com/adam/contiki/</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Contiki</td>
+                            <td class="match">Contiki</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">CON</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">1.2</td>
+                            <td class="match">1.2</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Other Mobile</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #794</div>
+                    <div class="ua-string">Contiki/2.2.2 http://www.sics.se/contiki/</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">Contiki</td>
+                            <td class="match">Contiki</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">CON</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">2.2.2</td>
+                            <td class="match">2.2.2</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Other Mobile</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #795</div>
+                    <div class="ua-string">NuttX/6.xx.x (; http://www.nuttx.org/)</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="match">NuttX</td>
+                            <td class="match">NuttX</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">ShortName</td>
+                            
+                            <td class="expected">NTX</td>
+                            <td class="actual">UNK</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">6</td>
+                            <td class="match">6</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Platform</td>
+                            
+                            <td class="match"></td>
+                            <td class="match"></td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Family</td>
+                            
+                            <td class="expected">Real-time OS</td>
+                            <td class="actual"></td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Camera</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">3 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Console</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">16 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Car Browser</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">4 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Notebook</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">1 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Feed Reader</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">30 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Mobile App</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">418 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Media Player</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">40 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>PIM</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">49 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Library</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">136 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Vendor Fragment</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">56 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Type Methods</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">14 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Parse Device (Integration)</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">100.0%</span>
+                    <span class="badge pass">24 passed</span>
+                    
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                <p class="all-passed">All tests passed!</p>
+                
+            </div>
+        </div>
+        
+        <div class="parser-section expanded">
+            <div class="parser-header" onclick="toggleSection(this)">
+                <div class="parser-title">
+                    <h3>Parse Client (Integration)</h3>
+                </div>
+                <div class="parser-stats">
+                    <span class="badge pct">99.6%</span>
+                    <span class="badge pass">1800 passed</span>
+                    <span class="badge fail">7 failed</span>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+            </div>
+            <div class="failures-list">
+                
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #331</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 13_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #484</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; U; Android 11; zh-CN; TECNO LE7 Build/MRA58K) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/57.0.2987.108 HiBrowser/2.3.013 UWS/ Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Hi Browser</td>
+                            <td class="actual">Chrome Webview</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">2.3.013</td>
+                            <td class="actual">57.0.2987.108</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">Blink</td>
+                            <td class="match">Blink</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">57.0.2987.108</td>
+                            <td class="match">57.0.2987.108</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #893</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 13_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #894</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 16_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery Dawn</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #895</div>
+                    <div class="ua-string">Mozilla/5.0 (iPhone; CPU iPhone OS 16_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/605.1.15 Ghostery Private Browser</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Ghostery Privacy Browser</td>
+                            <td class="actual">Mobile Safari</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">13.0.4</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">WebKit</td>
+                            <td class="match">WebKit</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">605.1.15</td>
+                            <td class="match">605.1.15</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #1086</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; U; Android 15; SM-S918B Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/142.0.7444.102 Mobile Safari/537.36 OPR/96.0.2254.79779</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Opera Mini</td>
+                            <td class="actual">Opera Mobile</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="match">96.0.2254.79779</td>
+                            <td class="match">96.0.2254.79779</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="match">Blink</td>
+                            <td class="match">Blink</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="match">142.0.7444.102</td>
+                            <td class="match">142.0.7444.102</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                <div class="failure-item">
+                    <div class="failure-header">Case #1088</div>
+                    <div class="ua-string">Mozilla/5.0 (Linux; Android 15; SM-S911B Build/AP3A.240905.015.A2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.155 Mobile Safari/537.36</div>
+                    <table class="diff-table">
+                        <tr>
+                            <th class="field">Field</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Type</td>
+                            
+                            <td class="match">browser</td>
+                            <td class="match">browser</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Name</td>
+                            
+                            <td class="expected">Opera GX</td>
+                            <td class="actual">Chrome Webview</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Version</td>
+                            
+                            <td class="expected">3.0.2.2237</td>
+                            <td class="actual">140.0.7339.155</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">Engine</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">Blink</td>
+                            
+                        </tr>
+                        
+                        <tr>
+                            <td class="field">EngineVersion</td>
+                            
+                            <td class="expected"></td>
+                            <td class="actual">140.0.7339.155</td>
+                            
+                        </tr>
+                        
+                    </table>
+                </div>
+                
+                
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        function toggleSection(header) {
+            header.parentElement.classList.toggle('expanded');
+        }
+    </script>
+</body>
+</html>

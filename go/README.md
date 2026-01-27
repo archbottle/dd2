@@ -10,10 +10,10 @@ A Go tool that analyzes the PHP device-detector YAML regex files and produces:
 
 ```bash
 # Run the analyzer
-go run ./cmd/analyze -regexes ../device-detector/regexes -output ./output
+go run ./cmd/analyze -regexes ../php/regexes -output ./output
 
 # Run tests
-go test ./analyzer/... -v
+go test ./... -v
 ```
 
 ## Output Files
@@ -80,17 +80,12 @@ These patterns require the `github.com/dlclark/regexp2` library.
 ## Project Structure
 
 ```
-go-analyzer/
-├── analyzer/
-│   ├── types.go          # Data structures
-│   ├── extractor.go      # Keyword extraction logic
-│   ├── parser.go         # YAML parsing
-│   ├── extractor_test.go # Unit tests
-│   └── analyzer_test.go  # Integration tests
-├── cmd/
-│   └── analyze/
-│       └── main.go       # CLI tool
-└── output/               # Generated index files
+dd2/
+├── go/
+│   ├── cmd/              # CLI tools (analyze, compat-report, etc.)
+│   ├── pkg/              # Parsers + shared logic
+│   └── regexes/          # YAML copied/ported from php/regexes for Go consumption
+└── php/                  # Upstream device-detector (git submodule)
 ```
 
 ## Example: Keyword Lookup Demo

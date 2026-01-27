@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"sync"
 
 	"github.com/archbottle/device-detector/pkg/bots"
 	"github.com/archbottle/device-detector/pkg/browser"
@@ -943,8 +945,8 @@ func CollectParseDeviceResults() (ParserResult, error) {
 	}
 
 	// Load fixtures from PHP test fixture files
-	// Path: dd2/device-detector/Tests/Parser/Device/fixtures/
-	phpFixturesDir := filepath.Join(baseDir, "..", "..", "device-detector", "Tests", "Parser", "Device", "fixtures")
+	// Path: <repo>/php/Tests/Parser/Device/fixtures/
+	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "Parser", "Device", "fixtures")
 	fixtureFiles := []string{"camera.yml", "car_browser.yml", "console.yml", "notebook.yml"}
 
 	for _, file := range fixtureFiles {
@@ -1029,8 +1031,8 @@ func CollectParseClientResults() (ParserResult, error) {
 	}
 
 	// Load fixtures from PHP test fixture files
-	// Path: dd2/device-detector/Tests/Parser/Client/fixtures/
-	phpFixturesDir := filepath.Join(baseDir, "..", "..", "device-detector", "Tests", "Parser", "Client", "fixtures")
+	// Path: <repo>/php/Tests/Parser/Client/fixtures/
+	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "Parser", "Client", "fixtures")
 	fixtureFiles := []string{"browser.yml", "feed_reader.yml", "library.yml", "mediaplayer.yml", "mobile_app.yml", "pim.yml"}
 
 	for _, file := range fixtureFiles {
@@ -1176,7 +1178,7 @@ func CollectFullParseResults() (ParserResult, error) {
 	}
 
 	// Load fixtures from all PHP testParse fixture files
-	phpFixturesDir := filepath.Join(baseDir, "..", "..", "device-detector", "Tests", "fixtures")
+	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "fixtures")
 	entries, err := os.ReadDir(phpFixturesDir)
 	if err != nil {
 		return result, err
@@ -1283,36 +1285,78 @@ func CollectFullParseResults() (ParserResult, error) {
 func CollectAll(includeFull bool) (*Report, error) {
 	report := &Report{}
 
-	collectors := []func() (ParserResult, error){
-		CollectBotResults,
-		CollectBrowserResults,
-		CollectOSResults,
-		CollectCameraResults,
-		CollectConsoleResults,
-		CollectCarBrowserResults,
-		CollectNotebookResults,
-		CollectFeedReaderResults,
-		CollectMobileAppResults,
-		CollectMediaPlayerResults,
-		CollectPIMResults,
-		CollectLibraryResults,
-		CollectVendorFragmentResults,
-		CollectTypeMethodsResults,
-		CollectParseDeviceResults,
-		CollectParseClientResults,
+	type collectorSpec struct {
+		Name string
+		Fn   func() (ParserResult, error)
+	}
+
+	collectors := []collectorSpec{
+		{Name: "Bots", Fn: CollectBotResults},
+		{Name: "Browser", Fn: CollectBrowserResults},
+		{Name: "Operating System", Fn: CollectOSResults},
+		{Name: "Camera", Fn: CollectCameraResults},
+		{Name: "Console", Fn: CollectConsoleResults},
+		{Name: "Car Browser", Fn: CollectCarBrowserResults},
+		{Name: "Notebook", Fn: CollectNotebookResults},
+		{Name: "Feed Reader", Fn: CollectFeedReaderResults},
+		{Name: "Mobile App", Fn: CollectMobileAppResults},
+		{Name: "Media Player", Fn: CollectMediaPlayerResults},
+		{Name: "PIM", Fn: CollectPIMResults},
+		{Name: "Library", Fn: CollectLibraryResults},
+		{Name: "Vendor Fragment", Fn: CollectVendorFragmentResults},
+		{Name: "Type Methods", Fn: CollectTypeMethodsResults},
+		{Name: "Parse Device", Fn: CollectParseDeviceResults},
+		{Name: "Parse Client", Fn: CollectParseClientResults},
 	}
 
 	if includeFull {
-		collectors = append(collectors, CollectFullParseResults)
+		collectors = append(collectors, collectorSpec{Name: "Full Parse", Fn: CollectFullParseResults})
 	}
 
-	for _, collect := range collectors {
-		result, err := collect()
-		if err != nil {
-			return nil, err
+	// Parallelize collectors (default: GOMAXPROCS; override via env DD2_COMPAT_WORKERS).
+	workers := runtime.GOMAXPROCS(0)
+	if v := os.Getenv("DD2_COMPAT_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			workers = n
 		}
-		report.Parsers = append(report.Parsers, result)
 	}
+	if workers < 1 {
+		workers = 1
+	}
+	if workers > len(collectors) {
+		workers = len(collectors)
+	}
+
+	results := make([]ParserResult, len(collectors))
+	errCh := make(chan error, len(collectors))
+	sem := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+
+	for i, spec := range collectors {
+		wg.Add(1)
+		go func(i int, spec collectorSpec) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			res, err := spec.Fn()
+			if err != nil {
+				errCh <- fmt.Errorf("%s: %w", spec.Name, err)
+				return
+			}
+			results[i] = res
+		}(i, spec)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		// fail fast: partial reports aren't useful for this tool
+		return nil, err
+	}
+
+	report.Parsers = append(report.Parsers, results...)
 
 	report.Calculate()
 	return report, nil

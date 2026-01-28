@@ -975,6 +975,7 @@ func CollectTypeMethodsResults() (ParserResult, error) {
 func CollectParseDeviceResults() (ParserResult, error) {
 	result := ParserResult{Name: "Parse Device (Integration)"}
 	baseDir := getBaseDir()
+	repoRoot := filepath.Clean(filepath.Join(baseDir, ".."))
 
 	dd, err := detector.New()
 	if err != nil {
@@ -983,7 +984,7 @@ func CollectParseDeviceResults() (ParserResult, error) {
 
 	// Load fixtures from PHP test fixture files
 	// Path: <repo>/php/Tests/Parser/Device/fixtures/
-	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "Parser", "Device", "fixtures")
+	phpFixturesDir := filepath.Join(repoRoot, "php", "Tests", "Parser", "Device", "fixtures")
 	fixtureFiles := []string{"camera.yml", "car_browser.yml", "console.yml", "notebook.yml"}
 
 	for _, file := range fixtureFiles {
@@ -1060,6 +1061,7 @@ type clientFixtureReport struct {
 func CollectParseClientResults() (ParserResult, error) {
 	result := ParserResult{Name: "Parse Client (Integration)"}
 	baseDir := getBaseDir()
+	repoRoot := filepath.Clean(filepath.Join(baseDir, ".."))
 
 	dd, err := detector.New()
 	if err != nil {
@@ -1068,7 +1070,7 @@ func CollectParseClientResults() (ParserResult, error) {
 
 	// Load fixtures from PHP test fixture files
 	// Path: <repo>/php/Tests/Parser/Client/fixtures/
-	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "Parser", "Client", "fixtures")
+	phpFixturesDir := filepath.Join(repoRoot, "php", "Tests", "Parser", "Client", "fixtures")
 	fixtureFiles := []string{"browser.yml", "feed_reader.yml", "library.yml", "mediaplayer.yml", "mobile_app.yml", "pim.yml"}
 
 	for _, file := range fixtureFiles {
@@ -1206,6 +1208,7 @@ func (f *fullParseFixtureReport) getHeaders() http.Header {
 func CollectFullParseResults() (ParserResult, error) {
 	result := ParserResult{Name: "Full Parse (Integration)"}
 	baseDir := getBaseDir()
+	repoRoot := filepath.Clean(filepath.Join(baseDir, ".."))
 
 	dd, err := detector.New()
 	if err != nil {
@@ -1213,7 +1216,7 @@ func CollectFullParseResults() (ParserResult, error) {
 	}
 
 	// Load fixtures from all PHP testParse fixture files
-	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "fixtures")
+	phpFixturesDir := filepath.Join(repoRoot, "php", "Tests", "fixtures")
 	entries, err := os.ReadDir(phpFixturesDir)
 	if err != nil {
 		return result, err
@@ -1321,6 +1324,7 @@ func CollectFullParseResults() (ParserResult, error) {
 func CollectFullParseResultsSample(n int, detectorOpts ...detector.Option) (ParserResult, error) {
 	result := ParserResult{Name: fmt.Sprintf("Full Parse Sample (N=%d)", n)}
 	baseDir := getBaseDir()
+	repoRoot := filepath.Clean(filepath.Join(baseDir, ".."))
 
 	dd, err := detector.New(detectorOpts...)
 	if err != nil {
@@ -1328,7 +1332,7 @@ func CollectFullParseResultsSample(n int, detectorOpts ...detector.Option) (Pars
 	}
 
 	// Load fixtures from all PHP testParse fixture files
-	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "fixtures")
+	phpFixturesDir := filepath.Join(repoRoot, "php", "Tests", "fixtures")
 	entries, err := os.ReadDir(phpFixturesDir)
 	if err != nil {
 		return result, err

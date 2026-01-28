@@ -1,103 +1,103 @@
 ---
 version: 1
-generated_at: 2026-01-27T22:32:38.862694823Z
+generated_at: 2026-01-28T22:45:56.523738356Z
 mappings:
     - from: php/Tests/fixtures/bots.yml
-      to: go/pkg/bots/fixtures/bots.yml
+      to: pkg/bots/fixtures/bots.yml
       sha256: 0d134f7c15fc294f993c294a8f1d0b9d5df54498dd61aff9743d366222ddd6b8
     - from: php/Tests/Parser/Client/fixtures/browser.yml
-      to: go/pkg/browser/fixtures/browser.yml
+      to: pkg/browser/fixtures/browser.yml
       sha256: 66cd450ca9fb320282b785a13cc2b86760f19d126127e682fb3d3ca655e6bacc
     - from: php/Tests/Parser/Device/fixtures/camera.yml
-      to: go/pkg/camera/fixtures/camera.yml
+      to: pkg/camera/fixtures/camera.yml
       sha256: bd3c48dd21ed15a8544aa3869e122ded4e383ddfed7ec8583bbf76e58e596882
     - from: php/Tests/Parser/Device/fixtures/car_browser.yml
-      to: go/pkg/carbrowser/fixtures/car_browser.yml
+      to: pkg/carbrowser/fixtures/car_browser.yml
       sha256: 879affee92a280129437a917ac76c10cb4c237b89913ee6cb45edceda8f8e0bf
     - from: php/Tests/Parser/Device/fixtures/console.yml
-      to: go/pkg/console/fixtures/console.yml
+      to: pkg/console/fixtures/console.yml
       sha256: e8303b0a0a4fefa8646d9cd8c3b77a9320df83a0f1c70a22bb67d893ef54f24f
     - from: php/Tests/Parser/fixtures/type-methods.yml
-      to: go/pkg/detector/fixtures/type-methods.yml
+      to: pkg/detector/fixtures/type-methods.yml
       sha256: 92c183ec8175de3e2aa1b93fc98bc6cfab4665064e2ba91a6a1d1e83dbc816b5
     - from: php/Tests/Parser/Client/fixtures/feed_reader.yml
-      to: go/pkg/feedreader/fixtures/feed_reader.yml
+      to: pkg/feedreader/fixtures/feed_reader.yml
       sha256: a6f7dff4630c39c76dcde0c672ca23b450ded309185b86f0fceb7a21bb811f08
     - from: php/Tests/Parser/Client/fixtures/library.yml
-      to: go/pkg/library/fixtures/library.yml
+      to: pkg/library/fixtures/library.yml
       sha256: 77a5e711b82c1c0b5b293c3bda3a55932cead5c9cc3cbf0f5beab7cec96d9aa3
     - from: php/Tests/Parser/Client/fixtures/mediaplayer.yml
-      to: go/pkg/mediaplayer/fixtures/mediaplayer.yml
+      to: pkg/mediaplayer/fixtures/mediaplayer.yml
       sha256: 17aed37805478ec57defc3a34d5e073af37713ab146d0281acb756ef33e04ff3
     - from: php/Tests/Parser/Client/fixtures/mobile_app.yml
-      to: go/pkg/mobileapp/fixtures/mobile_app.yml
+      to: pkg/mobileapp/fixtures/mobile_app.yml
       sha256: cca9d5bd17c1dfde29eab50ca493dff45ac4deb368ed109c003a2ad7afb00869
     - from: php/Tests/Parser/Device/fixtures/notebook.yml
-      to: go/pkg/notebook/fixtures/notebook.yml
+      to: pkg/notebook/fixtures/notebook.yml
       sha256: c65d0837c8a8d682412101fba535cd3d4b61dfdedacf902b589aa7941959a996
     - from: php/Tests/Parser/fixtures/oss.yml
-      to: go/pkg/operatingsystem/fixtures/oss.yml
+      to: pkg/operatingsystem/fixtures/oss.yml
       sha256: 401708ba692d410502a69e4b52eb44b83d0a1cf338225f6c759e3ab037b0cff4
     - from: php/Tests/Parser/Client/fixtures/pim.yml
-      to: go/pkg/pim/fixtures/pim.yml
+      to: pkg/pim/fixtures/pim.yml
       sha256: 5514fb45b2c459a8c9a671395542ef1ff3cbbcb6f4ee629874930c786020fece
     - from: php/Tests/Parser/fixtures/vendorfragments.yml
-      to: go/pkg/vendorfragment/fixtures/vendorfragments.yml
+      to: pkg/vendorfragment/fixtures/vendorfragments.yml
       sha256: d167f795efa483a402318aaa31f45f2b0700859dfae8e160565b8709936b3a69
     - from: php/regexes/bots.yml
-      to: go/regexes/bots.yml
+      to: regexes/bots.yml
       sha256: 6807e4faaa3579cb904b9aa5a2cf25143923346f0386ca12d903c4d014f4a713
     - from: php/regexes/client/browser_engine.yml
-      to: go/regexes/client/browser_engine.yml
+      to: regexes/client/browser_engine.yml
       sha256: e34514728a4ba9751e96102726e3f7400c7f80db5b247a2e93f567c6a9a9c165
     - from: php/regexes/client/browsers.yml
-      to: go/regexes/client/browsers.yml
+      to: regexes/client/browsers.yml
       sha256: 8ed3584ea8e45f513c619647ca9ec78532c0c2e0757765e41966895d51e077ef
     - from: php/regexes/client/feed_readers.yml
-      to: go/regexes/client/feed_readers.yml
+      to: regexes/client/feed_readers.yml
       sha256: b720517d37d2d7fb2845630d8a957abfe20200254d93d295de88025ba3f88b4d
     - from: php/regexes/client/hints/apps.yml
-      to: go/regexes/client/hints/apps.yml
+      to: regexes/client/hints/apps.yml
       sha256: 05c486c862c8cfda2b0090f022a5f433ceb0116872710eb4334c0b7999ac2a8e
     - from: php/regexes/client/hints/browsers.yml
-      to: go/regexes/client/hints/browsers.yml
+      to: regexes/client/hints/browsers.yml
       sha256: 3f3add87ff4a299950041f1fd411324902d40361a939debc3e7a4ac68766d051
     - from: php/regexes/client/libraries.yml
-      to: go/regexes/client/libraries.yml
+      to: regexes/client/libraries.yml
       sha256: e3eb7de2ad577e6e6c8d63174abe6458b7cd6a148df29d3d15c853fe6586b8d3
     - from: php/regexes/client/mediaplayers.yml
-      to: go/regexes/client/mediaplayers.yml
+      to: regexes/client/mediaplayers.yml
       sha256: 5cfda935bdebba405dfea6df39e31b5c50e7d6a357a10e2a3beca192457fda1e
     - from: php/regexes/client/mobile_apps.yml
-      to: go/regexes/client/mobile_apps.yml
+      to: regexes/client/mobile_apps.yml
       sha256: 6ea524edb540650e6e87eb3cc81b07dd52181f3b067fb04676314fd345ada3d6
     - from: php/regexes/client/pim.yml
-      to: go/regexes/client/pim.yml
+      to: regexes/client/pim.yml
       sha256: 05cc12efa1afa4c01119b159d55c0c543841f2a0bf1af50f667663a5bc3baaa3
     - from: php/regexes/device/cameras.yml
-      to: go/regexes/device/cameras.yml
+      to: regexes/device/cameras.yml
       sha256: 18cf615b99af9c583bb9b2f9fc3424b28abb9ffd9614c63320149067f9c031af
     - from: php/regexes/device/car_browsers.yml
-      to: go/regexes/device/car_browsers.yml
+      to: regexes/device/car_browsers.yml
       sha256: 889dce891765bb76e6b8bcd27b54155256f5ac9a105e84c591e5fe15f16f3784
     - from: php/regexes/device/consoles.yml
-      to: go/regexes/device/consoles.yml
+      to: regexes/device/consoles.yml
       sha256: ef80d88ef2f6e8b870860d289e3a5fba76abb4f3044f535f0f6154ae4d7c135d
     - from: php/regexes/device/mobiles.yml
-      to: go/regexes/device/mobiles.yml
+      to: regexes/device/mobiles.yml
       sha256: dcd6a7094651672c5b11a25f65c287cc83efa5c1b4b309a5cefb5e44b3802d50
     - from: php/regexes/device/notebooks.yml
-      to: go/regexes/device/notebooks.yml
+      to: regexes/device/notebooks.yml
       sha256: 02758311a62310d134a9448b652b81d34f403144b0152e159f1745adf81f081d
     - from: php/regexes/device/shell_tv.yml
-      to: go/regexes/device/shell_tv.yml
+      to: regexes/device/shell_tv.yml
       sha256: 1be3b97ec589d4cf79be7ad32f9625f1e1ead343dacf7d88bdb0760542486a32
     - from: php/regexes/device/televisions.yml
-      to: go/regexes/device/televisions.yml
+      to: regexes/device/televisions.yml
       sha256: 6e92ea9026b1a52b0aacdc28ab13e18c480c7cb98f08ac7abc64001c64e0dc20
     - from: php/regexes/oss.yml
-      to: go/regexes/oss.yml
+      to: regexes/oss.yml
       sha256: 7a4cab55dda11703ce557dea9bf3209e88f3c640a7b2e42d0391a78e4e366d1a
     - from: php/regexes/vendorfragments.yml
-      to: go/regexes/vendorfragments.yml
+      to: regexes/vendorfragments.yml
       sha256: 7e49f5990708c4d849f790b5ff04e26ecf4a7dcc31a215822e8584f194d23c7f

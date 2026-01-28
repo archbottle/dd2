@@ -265,7 +265,7 @@ func resourcesMain(args []string) error {
 func resourcesGen(root, resourcesPath string, args []string) error {
 	fs := flag.NewFlagSet("resources gen", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	goDir := fs.String("go-dir", filepath.Join(root, "go"), "Go subtree to scan for YAML files")
+	goDir := fs.String("go-dir", filepath.Join(root, "go"), "Go subtree to scan for YAML files (legacy layout used <root>/go; current layout uses <root>/pkg and <root>/regexes)")
 	phpDir := fs.String("php-dir", filepath.Join(root, "php"), "PHP subtree to scan for YAML files")
 	includeSHA := fs.Bool("sha256", true, "Include sha256 in the mapping entries")
 	if err := fs.Parse(args); err != nil {
@@ -277,9 +277,25 @@ func resourcesGen(root, resourcesPath string, args []string) error {
 		return err
 	}
 
-	goFiles, err := listYAMLFiles(*goDir)
-	if err != nil {
-		return err
+	// Repo layout support:
+	// - Legacy layout had Go YAML under <root>/go/...
+	// - Current layout has Go YAML under <root>/pkg/... and <root>/regexes/...
+	var goFiles []string
+	if isDir(*goDir) {
+		files, err := listYAMLFiles(*goDir)
+		if err != nil {
+			return err
+		}
+		goFiles = append(goFiles, files...)
+	} else {
+		files, err := listYAMLFilesMulti([]string{
+			filepath.Join(root, "pkg"),
+			filepath.Join(root, "regexes"),
+		})
+		if err != nil {
+			return err
+		}
+		goFiles = append(goFiles, files...)
 	}
 
 	var mappings []resourceMapping
@@ -360,7 +376,15 @@ func findPHPSrcForGoYAML(root, goRel string, phpIdx *phpIndex) (phpRel string, o
 
 	// 2) Path-based match for regex DBs (php and go share the same regexes/ layout).
 	if strings.HasPrefix(goRel, "go/regexes/") {
+		// Legacy layout: go/regexes/... -> php/regexes/...
 		want := "php/" + strings.TrimPrefix(goRel, "go/")
+		if fileExists(filepath.Join(root, filepath.FromSlash(want))) {
+			return want, true, nil
+		}
+	}
+	if strings.HasPrefix(goRel, "regexes/") {
+		// Current layout: regexes/... -> php/regexes/...
+		want := "php/" + goRel
 		if fileExists(filepath.Join(root, filepath.FromSlash(want))) {
 			return want, true, nil
 		}
@@ -372,6 +396,30 @@ func findPHPSrcForGoYAML(root, goRel string, phpIdx *phpIndex) (phpRel string, o
 		parts := strings.Split(goRel, "/")
 		if len(parts) >= 5 {
 			parser := parts[2]
+			file := parts[len(parts)-1]
+
+			var want string
+			switch parser {
+			case "browser", "feedreader", "library", "mediaplayer", "mobileapp", "pim":
+				want = "php/Tests/Parser/Client/fixtures/" + file
+			case "camera", "carbrowser", "console", "notebook":
+				want = "php/Tests/Parser/Device/fixtures/" + file
+			case "operatingsystem", "vendorfragment", "detector":
+				want = "php/Tests/Parser/fixtures/" + file
+			case "bots":
+				// PHP fixture lives under Tests/fixtures/ in this repo.
+				want = "php/Tests/fixtures/" + file
+			}
+			if want != "" && fileExists(filepath.Join(root, filepath.FromSlash(want))) {
+				return want, true, nil
+			}
+		}
+	}
+	// Current layout: pkg/<parser>/fixtures/<file>.yml
+	if strings.HasPrefix(goRel, "pkg/") && strings.Contains(goRel, "/fixtures/") {
+		parts := strings.Split(goRel, "/")
+		if len(parts) >= 4 {
+			parser := parts[1]
 			file := parts[len(parts)-1]
 
 			var want string
@@ -532,6 +580,29 @@ func listYAMLFiles(root string) ([]string, error) {
 	return out, nil
 }
 
+func listYAMLFilesMulti(roots []string) ([]string, error) {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, r := range roots {
+		if !isDir(r) {
+			continue
+		}
+		files, err := listYAMLFiles(r)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range files {
+			if _, ok := seen[f]; ok {
+				continue
+			}
+			seen[f] = struct{}{}
+			out = append(out, f)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 func hashIndexYAML(repoRoot, root string) (map[string][]string, error) {
 	files, err := listYAMLFiles(root)
 	if err != nil {
@@ -599,6 +670,15 @@ func pickBestPHPMatch(goRel string, phpCandidates []string) string {
 			}
 		}
 	}
+	// Current layout: regexes/... -> php/regexes/...
+	if strings.HasPrefix(goRel, "regexes/") {
+		want := "php/" + goRel
+		for _, c := range phpCandidates {
+			if c == want {
+				return c
+			}
+		}
+	}
 
 	goBase := pathBase(goRel)
 	for _, c := range phpCandidates {
@@ -620,7 +700,8 @@ func pathBase(p string) string {
 func findRepoRoot(start string) (string, error) {
 	dir := start
 	for i := 0; i < 20; i++ {
-		if isDir(filepath.Join(dir, "php")) && isDir(filepath.Join(dir, "go")) {
+		if isDir(filepath.Join(dir, "php")) &&
+			(isDir(filepath.Join(dir, "go")) || isDir(filepath.Join(dir, "pkg")) || isDir(filepath.Join(dir, "regexes"))) {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)
@@ -629,7 +710,7 @@ func findRepoRoot(start string) (string, error) {
 		}
 		dir = parent
 	}
-	return "", fmt.Errorf("repo root not found (expected directories: php/ and go/)")
+	return "", fmt.Errorf("repo root not found (expected directory: php/ and one of go/ or pkg/ or regexes/)")
 }
 
 func isDir(path string) bool {

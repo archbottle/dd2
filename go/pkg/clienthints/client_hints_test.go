@@ -1,6 +1,7 @@
 package clienthints
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -105,10 +106,10 @@ func TestIncorrectVersionListIsDiscarded(t *testing.T) {
 
 // TestNewWithStringHeaders tests the New() convenience function.
 func TestNewWithStringHeaders(t *testing.T) {
-	headers := map[string]string{
-		"sec-ch-ua":          `"Chrome";v="120", "Chromium";v="120"`,
-		"sec-ch-ua-mobile":   "?0",
-		"sec-ch-ua-platform": "macOS",
+	headers := http.Header{
+		"sec-ch-ua":          []string{`"Chrome";v="120", "Chromium";v="120"`},
+		"sec-ch-ua-mobile":   []string{"?0"},
+		"sec-ch-ua-platform": []string{"macOS"},
 	}
 
 	ch := New(headers)

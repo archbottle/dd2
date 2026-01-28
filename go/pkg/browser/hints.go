@@ -2,10 +2,8 @@ package browser
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 
+	"github.com/archbottle/device-detector/regexes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,9 +12,9 @@ type BrowserHints struct {
 	hints map[string]string
 }
 
-// NewBrowserHints loads the browser hints from the YAML file.
-func NewBrowserHints(hintsPath string) (*BrowserHints, error) {
-	data, err := os.ReadFile(hintsPath)
+// NewBrowserHints loads the browser hints from the embedded YAML DB.
+func NewBrowserHints() (*BrowserHints, error) {
+	data, err := regexes.FS.ReadFile("client/hints/browsers.yml")
 	if err != nil {
 		return nil, fmt.Errorf("reading browser hints file: %w", err)
 	}
@@ -29,15 +27,8 @@ func NewBrowserHints(hintsPath string) (*BrowserHints, error) {
 	return &BrowserHints{hints: hints}, nil
 }
 
-// NewDefaultBrowserHints creates browser hints using the repo-local path.
-func NewDefaultBrowserHints() (*BrowserHints, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil, fmt.Errorf("failed to get caller info")
-	}
-	hintsPath := filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "client", "hints", "browsers.yml")
-	return NewBrowserHints(hintsPath)
-}
+// NewDefaultBrowserHints is an alias for NewBrowserHints kept for compatibility.
+func NewDefaultBrowserHints() (*BrowserHints, error) { return NewBrowserHints() }
 
 // GetBrowserName returns the browser name for an app ID.
 func (h *BrowserHints) GetBrowserName(appID string) string {

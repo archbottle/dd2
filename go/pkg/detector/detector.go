@@ -1,8 +1,6 @@
 package detector
 
 import (
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/archbottle/device-detector/pkg/bots"
@@ -93,8 +91,8 @@ func WithFactoryOptions(opts ...common.FactoryOption) Option {
 	}
 }
 
-// New creates a new DeviceDetector with all parsers loaded.
-func New(regexesDir string, opts ...Option) (*DeviceDetector, error) {
+// New creates a new DeviceDetector with all parsers loaded from embedded regex YAMLs.
+func New(opts ...Option) (*DeviceDetector, error) {
 	d := &DeviceDetector{}
 	for _, opt := range opts {
 		opt(d)
@@ -103,49 +101,44 @@ func New(regexesDir string, opts ...Option) (*DeviceDetector, error) {
 	var err error
 
 	// Load bot parser
-	d.botFactory, err = bots.NewParserFactory(filepath.Join(regexesDir, "bots.yml"), d.factoryOpts...)
+	d.botFactory, err = bots.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Load OS parser
-	d.osFactory, err = operatingsystem.NewParserFactory(filepath.Join(regexesDir, "oss.yml"), d.factoryOpts...)
+	d.osFactory, err = operatingsystem.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Load client parsers in PHP order: FeedReader, MobileApp, MediaPlayer, PIM, Browser, Library
-	d.feedReaderFactory, err = feedreader.NewParserFactory(filepath.Join(regexesDir, "client", "feed_readers.yml"), d.factoryOpts...)
+	d.feedReaderFactory, err = feedreader.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.mobileAppFactory, err = mobileapp.NewParserFactory(filepath.Join(regexesDir, "client", "mobile_apps.yml"), d.factoryOpts...)
+	d.mobileAppFactory, err = mobileapp.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.mediaPlayerFactory, err = mediaplayer.NewParserFactory(filepath.Join(regexesDir, "client", "mediaplayers.yml"), d.factoryOpts...)
+	d.mediaPlayerFactory, err = mediaplayer.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.pimFactory, err = pim.NewParserFactory(filepath.Join(regexesDir, "client", "pim.yml"), d.factoryOpts...)
+	d.pimFactory, err = pim.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.browserFactory, err = browser.NewParserFactory(
-		filepath.Join(regexesDir, "client", "browsers.yml"),
-		filepath.Join(regexesDir, "client", "browser_engine.yml"),
-		filepath.Join(regexesDir, "client", "hints", "browsers.yml"),
-		d.factoryOpts...,
-	)
+	d.browserFactory, err = browser.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.libraryFactory, err = library.NewParserFactory(filepath.Join(regexesDir, "client", "libraries.yml"), d.factoryOpts...)
+	d.libraryFactory, err = library.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -162,22 +155,22 @@ func New(regexesDir string, opts ...Option) (*DeviceDetector, error) {
 		return nil, err
 	}
 
-	d.notebookFactory, err = notebook.NewParserFactory(filepath.Join(regexesDir, "device", "notebooks.yml"), d.factoryOpts...)
+	d.notebookFactory, err = notebook.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.consoleFactory, err = console.NewParserFactory(filepath.Join(regexesDir, "device", "consoles.yml"), d.factoryOpts...)
+	d.consoleFactory, err = console.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.carFactory, err = carbrowser.NewParserFactory(filepath.Join(regexesDir, "device", "car_browsers.yml"), d.factoryOpts...)
+	d.carFactory, err = carbrowser.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	d.cameraFactory, err = camera.NewParserFactory(filepath.Join(regexesDir, "device", "cameras.yml"), d.factoryOpts...)
+	d.cameraFactory, err = camera.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +178,7 @@ func New(regexesDir string, opts ...Option) (*DeviceDetector, error) {
 	// 7. PortableMediaPlayer - TODO: implement when needed
 
 	// 8. Mobile - the big one (~2000 brands, handles smartphones/tablets/phablets)
-	d.mobileFactory, err = mobile.NewParserFactory(filepath.Join(regexesDir, "device", "mobiles.yml"), d.factoryOpts...)
+	d.mobileFactory, err = mobile.NewParserFactory(d.factoryOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -193,14 +186,9 @@ func New(regexesDir string, opts ...Option) (*DeviceDetector, error) {
 	return d, nil
 }
 
-// NewDefault creates a DeviceDetector with default paths.
+// NewDefault creates a DeviceDetector with default options (alias for New).
 func NewDefault(opts ...Option) (*DeviceDetector, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil, nil
-	}
-	regexesDir := filepath.Join(filepath.Dir(filename), "..", "..", "regexes")
-	return New(regexesDir, opts...)
+	return New(opts...)
 }
 
 // ParseResult contains the parsed detection result with helper methods.
@@ -658,8 +646,13 @@ func (r *ParseResult) GetFullInfo() *FullInfo {
 	}
 
 	// Device info
+	// PHP infers device type "desktop" when no explicit device was detected but OS indicates desktop
+	deviceType := DeviceTypeNames[r.device]
+	if deviceType == "" && r.IsDesktop() {
+		deviceType = "desktop"
+	}
 	info.Device = &FullInfoDevice{
-		Type:  DeviceTypeNames[r.device],
+		Type:  deviceType,
 		Brand: r.brand,
 		Model: r.model,
 	}

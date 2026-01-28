@@ -1,6 +1,7 @@
 package operatingsystem
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,14 +9,15 @@ import (
 	"testing"
 
 	"github.com/archbottle/device-detector/pkg/clienthints"
+	"github.com/archbottle/device-detector/pkg/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
 type fixture struct {
-	UserAgent string            `yaml:"user_agent"`
-	Headers   map[string]string `yaml:"headers"`
+	UserAgent string                 `yaml:"user_agent"`
+	Headers   common.YAMLHTTPHeader `yaml:"headers"`
 	OS        struct {
 		Name      string `yaml:"name"`
 		ShortName string `yaml:"short_name"`
@@ -25,13 +27,6 @@ type fixture struct {
 	} `yaml:"os"`
 }
 
-func getRegexesDir() string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("failed to get caller info")
-	}
-	return filepath.Join(filepath.Dir(filename), "..", "..", "regexes")
-}
 
 func getFixturesPath() string {
 	_, filename, _, ok := runtime.Caller(0)
@@ -54,8 +49,7 @@ func loadFixtures(t *testing.T) []fixture {
 
 func newTestFactory(t *testing.T) *ParserFactory {
 	t.Helper()
-	baseDir := getRegexesDir()
-	f, err := NewParserFactory(filepath.Join(baseDir, "oss.yml"))
+	f, err := NewParserFactory()
 	require.NoError(t, err, "failed to create factory")
 	return f
 }
@@ -69,11 +63,11 @@ func TestParse(t *testing.T) {
 	factory := newTestFactory(t)
 	fixtures := loadFixtures(t)
 
-	for i, tc := range fixtures {
+		for i, tc := range fixtures {
 		t.Run("case_"+strconv.Itoa(i), func(t *testing.T) {
 			var opts []Option
-			if tc.Headers != nil && len(tc.Headers) > 0 {
-				ch := clienthints.New(tc.Headers)
+			if len(tc.Headers.Header()) > 0 {
+				ch := clienthints.New(tc.Headers.Header())
 				opts = append(opts, WithClientHints(ch))
 			}
 
@@ -179,8 +173,8 @@ func TestAllOperatingSystemsTested(t *testing.T) {
 
 		for _, tc := range fixtures {
 			var opts []Option
-			if tc.Headers != nil && len(tc.Headers) > 0 {
-				ch := clienthints.New(tc.Headers)
+			if len(tc.Headers.Header()) > 0 {
+				ch := clienthints.New(tc.Headers.Header())
 				opts = append(opts, WithClientHints(ch))
 			}
 
@@ -318,40 +312,40 @@ func TestClientHintOSDetection(t *testing.T) {
 	tests := []struct {
 		name     string
 		ua       string
-		headers  map[string]string
+		headers  http.Header
 		expected string
 	}{
 		{
 			"Windows from client hints",
 			"Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-			map[string]string{
-				"Sec-CH-UA-Platform":         "\"Windows\"",
-				"Sec-CH-UA-Platform-Version": "\"15.0.0\"",
+			http.Header{
+				"Sec-CH-UA-Platform":         []string{"\"Windows\""},
+				"Sec-CH-UA-Platform-Version": []string{"\"15.0.0\""},
 			},
 			"Windows",
 		},
 		{
 			"Android from client hints",
 			"Mozilla/5.0 (Linux; Android 10)",
-			map[string]string{
-				"Sec-CH-UA-Platform":         "\"Android\"",
-				"Sec-CH-UA-Platform-Version": "\"10\"",
+			http.Header{
+				"Sec-CH-UA-Platform":         []string{"\"Android\""},
+				"Sec-CH-UA-Platform-Version": []string{"\"10\""},
 			},
 			"Android",
 		},
 		{
 			"Linux mapped to GNU/Linux",
 			"Mozilla/5.0 (X11; Linux x86_64)",
-			map[string]string{
-				"Sec-CH-UA-Platform": "\"Linux\"",
+			http.Header{
+				"Sec-CH-UA-Platform": []string{"\"Linux\""},
 			},
 			"GNU/Linux",
 		},
 		{
 			"MacOS mapped to Mac",
 			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-			map[string]string{
-				"Sec-CH-UA-Platform": "\"macOS\"",
+			http.Header{
+				"Sec-CH-UA-Platform": []string{"\"macOS\""},
 			},
 			"Mac",
 		},

@@ -3,9 +3,9 @@ package vendorfragment
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/device-detector/regexes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,10 +21,9 @@ type ParserFactory struct {
 	compiled map[string]common.UniversalRegex // raw regex fragment -> compiled matcher
 }
 
-// NewParserFactory creates a factory by loading and compiling vendor fragment regexes from a YAML file.
-func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
-	// #nosec G304 -- regexesPath is provided by the library caller.
-	data, err := os.ReadFile(regexesPath)
+// NewParserFactory creates a factory by loading and compiling vendor fragment regexes from the embedded YAML DB.
+func NewParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
+	data, err := regexes.FS.ReadFile("vendorfragments.yml")
 	if err != nil {
 		return nil, fmt.Errorf("reading regexes file: %w", err)
 	}

@@ -2,12 +2,10 @@ package operatingsystem
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 
 	"github.com/archbottle/device-detector/pkg/clienthints"
 	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/device-detector/regexes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,10 +21,9 @@ type ParserFactory struct {
 	db *common.YAMLListDB[*Entry]
 }
 
-// NewParserFactory creates a factory by loading and compiling regexes from YAML files.
-func NewParserFactory(ossPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
-	// Load OS entries
-	data, err := os.ReadFile(ossPath)
+// NewParserFactory creates a factory by loading and compiling regexes from the embedded YAML DB.
+func NewParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
+	data, err := regexes.FS.ReadFile("oss.yml")
 	if err != nil {
 		return nil, fmt.Errorf("reading oss regexes file: %w", err)
 	}
@@ -79,17 +76,9 @@ func NewParserFactory(ossPath string, opts ...common.FactoryOption) (*ParserFact
 	return f, nil
 }
 
-// NewDefaultParserFactory creates a factory using the repo-local YAML paths.
+// NewDefaultParserFactory is an alias for NewParserFactory kept for compatibility.
 func NewDefaultParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil, fmt.Errorf("failed to get caller info")
-	}
-
-	baseDir := filepath.Join(filepath.Dir(filename), "..", "..", "regexes")
-	ossPath := filepath.Join(baseDir, "oss.yml")
-
-	return NewParserFactory(ossPath, opts...)
+	return NewParserFactory(opts...)
 }
 
 // NewParser creates a new Parser instance for parsing a single user agent.

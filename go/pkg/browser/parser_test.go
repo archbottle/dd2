@@ -8,14 +8,16 @@ import (
 	"testing"
 
 	"github.com/archbottle/device-detector/pkg/clienthints"
+	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/device-detector/regexes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
 type fixture struct {
-	UserAgent string            `yaml:"user_agent"`
-	Headers   map[string]string `yaml:"headers"`
+	UserAgent string                `yaml:"user_agent"`
+	Headers   common.YAMLHTTPHeader `yaml:"headers"`
 	Client    struct {
 		Type          string `yaml:"type"`
 		Name          string `yaml:"name"`
@@ -24,14 +26,6 @@ type fixture struct {
 		EngineVersion string `yaml:"engine_version"`
 		Family        string `yaml:"family"`
 	} `yaml:"client"`
-}
-
-func getRegexesDir() string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("failed to get caller info")
-	}
-	return filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "client")
 }
 
 func getFixturesPath() string {
@@ -55,12 +49,7 @@ func loadFixtures(t *testing.T) []fixture {
 
 func newTestFactory(t *testing.T) *ParserFactory {
 	t.Helper()
-	baseDir := getRegexesDir()
-	f, err := NewParserFactory(
-		filepath.Join(baseDir, "browsers.yml"),
-		filepath.Join(baseDir, "browser_engine.yml"),
-		filepath.Join(baseDir, "hints", "browsers.yml"),
-	)
+	f, err := NewParserFactory()
 	require.NoError(t, err, "failed to create factory")
 	return f
 }
@@ -77,8 +66,8 @@ func TestParse(t *testing.T) {
 	for i, tc := range fixtures {
 		t.Run("case_"+strconv.Itoa(i), func(t *testing.T) {
 			var opts []Option
-			if tc.Headers != nil && len(tc.Headers) > 0 {
-				ch := clienthints.New(tc.Headers)
+			if len(tc.Headers.Header()) > 0 {
+				ch := clienthints.New(tc.Headers.Header())
 				opts = append(opts, WithClientHints(ch))
 			}
 
@@ -133,8 +122,8 @@ func TestAllBrowsersTested(t *testing.T) {
 
 	for _, tc := range fixtures {
 		var opts []Option
-		if tc.Headers != nil && len(tc.Headers) > 0 {
-			ch := clienthints.New(tc.Headers)
+		if len(tc.Headers.Header()) > 0 {
+			ch := clienthints.New(tc.Headers.Header())
 			opts = append(opts, WithClientHints(ch))
 		}
 
@@ -169,8 +158,7 @@ func TestGetAvailableClients(t *testing.T) {
 
 // TestStructureBrowsersYml mirrors BrowserTest::testStructureBrowsersYml.
 func TestStructureBrowsersYml(t *testing.T) {
-	baseDir := getRegexesDir()
-	data, err := os.ReadFile(filepath.Join(baseDir, "browsers.yml"))
+	data, err := regexes.FS.ReadFile("client/browsers.yml")
 	require.NoError(t, err, "failed to read browsers.yml")
 
 	var items []map[string]any
@@ -232,10 +220,7 @@ func TestShortCodesComparisonWithBrowsers(t *testing.T) {
 
 // TestBrowserHintsForAvailableBrowsers mirrors BrowserTest::testBrowserHintsForAvailableBrowsers.
 func TestBrowserHintsForAvailableBrowsers(t *testing.T) {
-	baseDir := getRegexesDir()
-	hintsPath := filepath.Join(baseDir, "hints", "browsers.yml")
-
-	data, err := os.ReadFile(hintsPath)
+	data, err := regexes.FS.ReadFile("client/hints/browsers.yml")
 	require.NoError(t, err, "failed to read browser hints")
 
 	var hints map[string]string

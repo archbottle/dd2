@@ -2,11 +2,9 @@ package mobileapp
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 
 	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/device-detector/regexes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,10 +20,9 @@ type ParserFactory struct {
 	db *common.YAMLListDB[*Entry]
 }
 
-// NewParserFactory creates a factory by loading and compiling regexes from a YAML file.
-func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
-	// #nosec G304 -- regexesPath is provided by the library caller.
-	data, err := os.ReadFile(regexesPath)
+// NewParserFactory creates a factory by loading and compiling regexes from the embedded YAML DB.
+func NewParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
+	data, err := regexes.FS.ReadFile("client/mobile_apps.yml")
 	if err != nil {
 		return nil, fmt.Errorf("reading regexes file: %w", err)
 	}
@@ -64,15 +61,8 @@ func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*Parser
 	return f, nil
 }
 
-// NewDefaultParserFactory creates a factory using the repo-local mobile_apps.yml path.
-func NewDefaultParserFactory() (*ParserFactory, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil, fmt.Errorf("failed to get caller info")
-	}
-	regexesPath := filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "client", "mobile_apps.yml")
-	return NewParserFactory(regexesPath)
-}
+// NewDefaultParserFactory is an alias for NewParserFactory kept for compatibility.
+func NewDefaultParserFactory() (*ParserFactory, error) { return NewParserFactory() }
 
 // NewParser creates a new Parser instance for parsing a single user agent.
 func (f *ParserFactory) NewParser(ua string, opts ...Option) *Parser {

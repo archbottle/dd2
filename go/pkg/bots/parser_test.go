@@ -12,14 +12,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// getRegexesPath returns the path to the regexes directory.
-func getRegexesPath() string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("failed to get caller info")
-	}
-	return filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "bots.yml")
-}
 
 // getFixturesPath returns the path to the fixtures file.
 func getFixturesPath() string {
@@ -33,7 +25,7 @@ func getFixturesPath() string {
 // newTestFactory creates a factory for testing.
 func newTestFactory(t *testing.T) *ParserFactory {
 	t.Helper()
-	factory, err := NewParserFactory(getRegexesPath())
+	factory, err := NewParserFactory()
 	if err != nil {
 		t.Fatalf("failed to create factory: %v", err)
 	}
@@ -270,7 +262,7 @@ func TestFactoryConvenienceMethods(t *testing.T) {
 
 // BenchmarkParse benchmarks parsing performance.
 func BenchmarkParse(b *testing.B) {
-	factory, err := NewParserFactory(getRegexesPath())
+	factory, err := NewParserFactory()
 	if err != nil {
 		b.Fatalf("failed to create factory: %v", err)
 	}
@@ -290,7 +282,7 @@ func BenchmarkParse(b *testing.B) {
 
 // BenchmarkIsBot benchmarks IsBot performance.
 func BenchmarkIsBot(b *testing.B) {
-	factory, err := NewParserFactory(getRegexesPath())
+	factory, err := NewParserFactory()
 	if err != nil {
 		b.Fatalf("failed to create factory: %v", err)
 	}

@@ -2,14 +2,12 @@ package browser
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/device-detector/regexes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,9 +33,9 @@ type EngineParser struct {
 	db       *common.YAMLListDB[*EngineEntry]
 }
 
-// NewEngineParser creates an engine parser from the YAML file.
-func NewEngineParser(regexesPath string, opts ...common.FactoryOption) (*EngineParser, error) {
-	data, err := os.ReadFile(regexesPath)
+// NewEngineParser creates an engine parser from the embedded YAML DB.
+func NewEngineParser(opts ...common.FactoryOption) (*EngineParser, error) {
+	data, err := regexes.FS.ReadFile("client/browser_engine.yml")
 	if err != nil {
 		return nil, fmt.Errorf("reading engine regexes file: %w", err)
 	}
@@ -77,15 +75,8 @@ func NewEngineParser(regexesPath string, opts ...common.FactoryOption) (*EngineP
 	return p, nil
 }
 
-// NewDefaultEngineParser creates an engine parser using the repo-local path.
-func NewDefaultEngineParser() (*EngineParser, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil, fmt.Errorf("failed to get caller info")
-	}
-	regexesPath := filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "client", "browser_engine.yml")
-	return NewEngineParser(regexesPath)
-}
+// NewDefaultEngineParser is an alias for NewEngineParser kept for compatibility.
+func NewDefaultEngineParser() (*EngineParser, error) { return NewEngineParser() }
 
 // Parse detects the browser engine from the user agent.
 func (p *EngineParser) Parse(ua string) string {

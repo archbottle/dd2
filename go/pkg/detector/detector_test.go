@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/archbottle/device-detector/pkg/clienthints"
+	"github.com/archbottle/device-detector/pkg/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -16,9 +18,9 @@ import (
 
 // clientFixture matches the PHP client fixture format (browser, feed_reader, etc.).
 type clientFixture struct {
-	UserAgent string            `yaml:"user_agent"`
-	Headers   map[string]string `yaml:"headers"`
-	Client    clientExpect      `yaml:"client"`
+	UserAgent string                 `yaml:"user_agent"`
+	Headers   common.YAMLHTTPHeader `yaml:"headers"`
+	Client    clientExpect           `yaml:"client"`
 }
 
 type clientExpect struct {
@@ -99,15 +101,15 @@ func stringFromInterface(v interface{}) string {
 
 // getHeaders extracts simple string headers from the fixture.
 // Complex client hints structures (with brands arrays) are ignored for now.
-func (f *fullParseFixture) getHeaders() map[string]string {
+func (f *fullParseFixture) getHeaders() http.Header {
 	if f.Headers == nil {
 		return nil
 	}
 	if m, ok := f.Headers.(map[string]interface{}); ok {
-		result := make(map[string]string)
+		result := make(http.Header)
 		for k, v := range m {
 			if s, ok := v.(string); ok {
-				result[k] = s
+				result.Set(k, s)
 			}
 			// Skip complex structures (arrays, nested maps)
 		}
@@ -156,11 +158,6 @@ type typeMethodFixture struct {
 	Check     []bool `yaml:"check"`
 }
 
-func getRegexesDir(t *testing.T) string {
-	_, filename, _, ok := runtime.Caller(0)
-	require.True(t, ok, "failed to get caller info")
-	return filepath.Join(filepath.Dir(filename), "..", "..", "regexes")
-}
 
 func loadTypeMethodFixtures(t *testing.T) []typeMethodFixture {
 	_, filename, _, ok := runtime.Caller(0)
@@ -180,10 +177,8 @@ func loadTypeMethodFixtures(t *testing.T) []typeMethodFixture {
 // TestTypeMethods tests the boolean classification methods.
 // PHP: DeviceDetectorTest::testTypeMethods
 func TestTypeMethods(t *testing.T) {
-	regexesDir := getRegexesDir(t)
-
 	// Create detector with discardBotInformation (as PHP test does)
-	dd, err := New(regexesDir, WithDiscardBotInformation())
+	dd, err := New(WithDiscardBotInformation())
 	require.NoError(t, err, "failed to create DeviceDetector")
 
 	fixtures := loadTypeMethodFixtures(t)
@@ -271,9 +266,7 @@ func loadFullParseFixtures(t *testing.T) []fullParseFixture {
 // PHP: DeviceDetectorTest::testParse
 // This is the comprehensive integration test that validates the complete detection output.
 func TestParse(t *testing.T) {
-	regexesDir := getRegexesDir(t)
-
-	dd, err := New(regexesDir)
+	dd, err := New()
 	require.NoError(t, err, "failed to create DeviceDetector")
 
 	fixtures := loadFullParseFixtures(t)
@@ -412,9 +405,7 @@ func loadClientFixtures(t *testing.T) []clientFixture {
 // This runs the FULL detection pipeline but only validates the client field.
 // NOTE: The 'family' field is excluded from comparison (as PHP does).
 func TestParseClient(t *testing.T) {
-	regexesDir := getRegexesDir(t)
-
-	dd, err := New(regexesDir)
+	dd, err := New()
 	require.NoError(t, err, "failed to create DeviceDetector")
 
 	fixtures := loadClientFixtures(t)
@@ -429,8 +420,8 @@ func TestParseClient(t *testing.T) {
 		t.Run("case_"+strconv.Itoa(i), func(t *testing.T) {
 			// Build client hints if headers present
 			var ch *clienthints.ClientHints
-			if len(tc.Headers) > 0 {
-				ch = clienthints.New(tc.Headers)
+			if len(tc.Headers.Header()) > 0 {
+				ch = clienthints.New(tc.Headers.Header())
 			}
 
 			result := dd.Parse(tc.UserAgent, ch)
@@ -525,9 +516,7 @@ func loadDeviceFixtures(t *testing.T) []deviceFixture {
 // PHP: DeviceDetectorTest::testParseDevice
 // This runs the FULL detection pipeline but only validates the device field.
 func TestParseDevice(t *testing.T) {
-	regexesDir := getRegexesDir(t)
-
-	dd, err := New(regexesDir)
+	dd, err := New()
 	require.NoError(t, err, "failed to create DeviceDetector")
 
 	fixtures := loadDeviceFixtures(t)
@@ -583,9 +572,7 @@ func TestParseDevice(t *testing.T) {
 // TestDetectDeviceTypeFromClientHints tests device type detection from form factors in client hints.
 // PHP equivalent: DeviceDetectorTest::testDetectDeviceTypeFromClientHints
 func TestDetectDeviceTypeFromClientHints(t *testing.T) {
-	regexesDir := getRegexesDir(t)
-
-	dd, err := New(regexesDir)
+	dd, err := New()
 	require.NoError(t, err, "failed to create DeviceDetector")
 
 	useragent := "Some Unknown UA"

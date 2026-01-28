@@ -21,13 +21,6 @@ type fixtureCase struct {
 	} `yaml:"device"`
 }
 
-func getRegexesPath() string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("failed to get caller info")
-	}
-	return filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "device", "consoles.yml")
-}
 
 func getFixturesPath() string {
 	_, filename, _, ok := runtime.Caller(0)
@@ -52,7 +45,7 @@ func loadFixtures(t *testing.T) []fixtureCase {
 
 func newTestFactory(t *testing.T) *ParserFactory {
 	t.Helper()
-	f, err := NewParserFactory(getRegexesPath())
+	f, err := NewParserFactory()
 	if err != nil {
 		t.Fatalf("failed to create factory: %v", err)
 	}

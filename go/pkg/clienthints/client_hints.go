@@ -1,6 +1,7 @@
 package clienthints
 
 import (
+	"net/http"
 	"regexp"
 	"strings"
 )
@@ -212,15 +213,21 @@ func parseBrandVersionMapArray(arr []map[string]string) ([]BrandVersion, bool) {
 	return list, true
 }
 
-// New creates a ClientHints object from string headers.
+// New creates a ClientHints object from HTTP headers.
 // This is a convenience wrapper around Factory for the common case
-// where all header values are strings.
-func New(headers map[string]string) *ClientHints {
-	// Convert to interface{} map
+// where headers come from an HTTP request.
+func New(headers http.Header) *ClientHints {
+	// Convert http.Header to interface{} map
+	// For multi-valued headers, join with ", " to match HTTP header format
 	m := make(map[string]interface{}, len(headers))
-	for k, v := range headers {
-		if v != "" {
-			m[k] = v
+	for k, values := range headers {
+		if len(values) == 0 {
+			continue
+		}
+		// Join multiple values with ", " (standard HTTP header format)
+		joined := strings.Join(values, ", ")
+		if joined != "" {
+			m[k] = joined
 		}
 	}
 	return Factory(m)

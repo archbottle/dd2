@@ -2,12 +2,10 @@ package browser
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 
 	"github.com/archbottle/device-detector/pkg/clienthints"
 	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/device-detector/regexes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,10 +27,10 @@ type ParserFactory struct {
 	browserHints *BrowserHints
 }
 
-// NewParserFactory creates a factory by loading and compiling regexes from YAML files.
-func NewParserFactory(browsersPath, enginePath, hintsPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
+// NewParserFactory creates a factory by loading and compiling regexes from the embedded YAML DB.
+func NewParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
 	// Load browser entries
-	data, err := os.ReadFile(browsersPath)
+	data, err := regexes.FS.ReadFile("client/browsers.yml")
 	if err != nil {
 		return nil, fmt.Errorf("reading browsers regexes file: %w", err)
 	}
@@ -70,14 +68,14 @@ func NewParserFactory(browsersPath, enginePath, hintsPath string, opts ...common
 	f.db = db
 
 	// Load engine parser
-	engineParser, err := NewEngineParser(enginePath, opts...)
+	engineParser, err := NewEngineParser(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("creating engine parser: %w", err)
 	}
 	f.engineParser = engineParser
 
 	// Load browser hints
-	browserHints, err := NewBrowserHints(hintsPath)
+	browserHints, err := NewBrowserHints()
 	if err != nil {
 		return nil, fmt.Errorf("creating browser hints: %w", err)
 	}
@@ -86,19 +84,9 @@ func NewParserFactory(browsersPath, enginePath, hintsPath string, opts ...common
 	return f, nil
 }
 
-// NewDefaultParserFactory creates a factory using the repo-local YAML paths.
+// NewDefaultParserFactory is an alias for NewParserFactory kept for compatibility.
 func NewDefaultParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil, fmt.Errorf("failed to get caller info")
-	}
-
-	baseDir := filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "client")
-	browsersPath := filepath.Join(baseDir, "browsers.yml")
-	enginePath := filepath.Join(baseDir, "browser_engine.yml")
-	hintsPath := filepath.Join(baseDir, "hints", "browsers.yml")
-
-	return NewParserFactory(browsersPath, enginePath, hintsPath, opts...)
+	return NewParserFactory(opts...)
 }
 
 // NewParser creates a new Parser instance for parsing a single user agent.

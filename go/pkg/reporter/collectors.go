@@ -3,6 +3,7 @@ package reporter
 import (
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,6 +17,7 @@ import (
 	"github.com/archbottle/device-detector/pkg/camera"
 	"github.com/archbottle/device-detector/pkg/carbrowser"
 	"github.com/archbottle/device-detector/pkg/clienthints"
+	"github.com/archbottle/device-detector/pkg/common"
 	"github.com/archbottle/device-detector/pkg/console"
 	"github.com/archbottle/device-detector/pkg/detector"
 	"github.com/archbottle/device-detector/pkg/feedreader"
@@ -50,7 +52,7 @@ func allMatch(fields []FieldDiff) bool {
 
 // clientHintsFromHeaders extracts client-hints-related headers in deterministic order.
 // This is meant for report display/debugging and mirrors what pkg/clienthints.Factory recognizes.
-func clientHintsFromHeaders(headers map[string]string) []HeaderKV {
+func clientHintsFromHeaders(headers http.Header) []HeaderKV {
 	if len(headers) == 0 {
 		return nil
 	}
@@ -94,15 +96,17 @@ func clientHintsFromHeaders(headers map[string]string) []HeaderKV {
 	}
 
 	var out []HeaderKV
-	for k, v := range headers {
-		if v == "" {
+	for k, values := range headers {
+		if len(values) == 0 || values[0] == "" {
 			continue
 		}
 		norm := strings.ToLower(strings.ReplaceAll(k, "_", "-"))
 		if _, ok := allowed[norm]; !ok {
 			continue
 		}
-		out = append(out, HeaderKV{Name: k, Value: v})
+		// Join multiple values with ", " for display
+		value := strings.Join(values, ", ")
+		out = append(out, HeaderKV{Name: k, Value: value})
 	}
 
 	if len(out) == 0 {
@@ -119,8 +123,8 @@ func clientHintsFromHeaders(headers map[string]string) []HeaderKV {
 // ============================================================================
 
 type browserFixture struct {
-	UserAgent string            `yaml:"user_agent"`
-	Headers   map[string]string `yaml:"headers"`
+	UserAgent string                `yaml:"user_agent"`
+	Headers   common.YAMLHTTPHeader `yaml:"headers"`
 	Client    struct {
 		Type          string `yaml:"type"`
 		Name          string `yaml:"name"`
@@ -136,11 +140,7 @@ func CollectBrowserResults() (ParserResult, error) {
 	baseDir := getBaseDir()
 
 	// Load factory
-	factory, err := browser.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "client", "browsers.yml"),
-		filepath.Join(baseDir, "..", "regexes", "client", "browser_engine.yml"),
-		filepath.Join(baseDir, "..", "regexes", "client", "hints", "browsers.yml"),
-	)
+	factory, err := browser.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -157,8 +157,8 @@ func CollectBrowserResults() (ParserResult, error) {
 
 	for i, tc := range fixtures {
 		var opts []browser.Option
-		if len(tc.Headers) > 0 {
-			ch := clienthints.New(tc.Headers)
+		if len(tc.Headers.Header()) > 0 {
+			ch := clienthints.New(tc.Headers.Header())
 			opts = append(opts, browser.WithClientHints(ch))
 		}
 
@@ -190,7 +190,7 @@ func CollectBrowserResults() (ParserResult, error) {
 			result.Failures = append(result.Failures, TestFailure{
 				CaseIndex:   i,
 				UserAgent:   tc.UserAgent,
-				ClientHints: clientHintsFromHeaders(tc.Headers),
+				ClientHints: clientHintsFromHeaders(tc.Headers.Header()),
 				Fields:      fields,
 			})
 		}
@@ -204,8 +204,8 @@ func CollectBrowserResults() (ParserResult, error) {
 // ============================================================================
 
 type osFixture struct {
-	UserAgent string            `yaml:"user_agent"`
-	Headers   map[string]string `yaml:"headers"`
+	UserAgent string                `yaml:"user_agent"`
+	Headers   common.YAMLHTTPHeader `yaml:"headers"`
 	OS        struct {
 		Name      string `yaml:"name"`
 		ShortName string `yaml:"short_name"`
@@ -219,9 +219,7 @@ func CollectOSResults() (ParserResult, error) {
 	result := ParserResult{Name: "Operating System"}
 	baseDir := getBaseDir()
 
-	factory, err := operatingsystem.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "oss.yml"),
-	)
+	factory, err := operatingsystem.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -237,8 +235,8 @@ func CollectOSResults() (ParserResult, error) {
 
 	for i, tc := range fixtures {
 		var opts []operatingsystem.Option
-		if len(tc.Headers) > 0 {
-			ch := clienthints.New(tc.Headers)
+		if len(tc.Headers.Header()) > 0 {
+			ch := clienthints.New(tc.Headers.Header())
 			opts = append(opts, operatingsystem.WithClientHints(ch))
 		}
 
@@ -274,7 +272,7 @@ func CollectOSResults() (ParserResult, error) {
 			result.Failures = append(result.Failures, TestFailure{
 				CaseIndex:   i,
 				UserAgent:   tc.UserAgent,
-				ClientHints: clientHintsFromHeaders(tc.Headers),
+				ClientHints: clientHintsFromHeaders(tc.Headers.Header()),
 				Fields:      fields,
 			})
 		}
@@ -300,9 +298,7 @@ func CollectCameraResults() (ParserResult, error) {
 	result := ParserResult{Name: "Camera"}
 	baseDir := getBaseDir()
 
-	factory, err := camera.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "device", "cameras.yml"),
-	)
+	factory, err := camera.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -351,9 +347,7 @@ func CollectConsoleResults() (ParserResult, error) {
 	result := ParserResult{Name: "Console"}
 	baseDir := getBaseDir()
 
-	factory, err := console.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "device", "consoles.yml"),
-	)
+	factory, err := console.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -403,9 +397,7 @@ func CollectCarBrowserResults() (ParserResult, error) {
 	result := ParserResult{Name: "Car Browser"}
 	baseDir := getBaseDir()
 
-	factory, err := carbrowser.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "device", "car_browsers.yml"),
-	)
+	factory, err := carbrowser.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -455,9 +447,7 @@ func CollectNotebookResults() (ParserResult, error) {
 	result := ParserResult{Name: "Notebook"}
 	baseDir := getBaseDir()
 
-	factory, err := notebook.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "device", "notebooks.yml"),
-	)
+	factory, err := notebook.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -520,9 +510,7 @@ func CollectFeedReaderResults() (ParserResult, error) {
 	result := ParserResult{Name: "Feed Reader"}
 	baseDir := getBaseDir()
 
-	factory, err := feedreader.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "client", "feed_readers.yml"),
-	)
+	factory, err := feedreader.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -571,9 +559,7 @@ func CollectMobileAppResults() (ParserResult, error) {
 	result := ParserResult{Name: "Mobile App"}
 	baseDir := getBaseDir()
 
-	factory, err := mobileapp.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "client", "mobile_apps.yml"),
-	)
+	factory, err := mobileapp.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -622,9 +608,7 @@ func CollectMediaPlayerResults() (ParserResult, error) {
 	result := ParserResult{Name: "Media Player"}
 	baseDir := getBaseDir()
 
-	factory, err := mediaplayer.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "client", "mediaplayers.yml"),
-	)
+	factory, err := mediaplayer.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -673,9 +657,7 @@ func CollectPIMResults() (ParserResult, error) {
 	result := ParserResult{Name: "PIM"}
 	baseDir := getBaseDir()
 
-	factory, err := pim.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "client", "pim.yml"),
-	)
+	factory, err := pim.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -724,9 +706,7 @@ func CollectLibraryResults() (ParserResult, error) {
 	result := ParserResult{Name: "Library"}
 	baseDir := getBaseDir()
 
-	factory, err := library.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "client", "libraries.yml"),
-	)
+	factory, err := library.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -784,9 +764,7 @@ func CollectVendorFragmentResults() (ParserResult, error) {
 	result := ParserResult{Name: "Vendor Fragment"}
 	baseDir := getBaseDir()
 
-	factory, err := vendorfragment.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "vendorfragments.yml"),
-	)
+	factory, err := vendorfragment.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -849,9 +827,7 @@ func CollectBotResults() (ParserResult, error) {
 	result := ParserResult{Name: "Bot"}
 	baseDir := getBaseDir()
 
-	factory, err := bots.NewParserFactory(
-		filepath.Join(baseDir, "..", "regexes", "bots.yml"),
-	)
+	factory, err := bots.NewParserFactory()
 	if err != nil {
 		return result, err
 	}
@@ -930,8 +906,7 @@ func CollectTypeMethodsResults() (ParserResult, error) {
 	result := ParserResult{Name: "Type Methods"}
 	baseDir := getBaseDir()
 
-	regexesDir := filepath.Join(baseDir, "..", "regexes")
-	dd, err := detector.New(regexesDir, detector.WithDiscardBotInformation())
+	dd, err := detector.New(detector.WithDiscardBotInformation())
 	if err != nil {
 		return result, err
 	}
@@ -1001,8 +976,7 @@ func CollectParseDeviceResults() (ParserResult, error) {
 	result := ParserResult{Name: "Parse Device (Integration)"}
 	baseDir := getBaseDir()
 
-	regexesDir := filepath.Join(baseDir, "..", "regexes")
-	dd, err := detector.New(regexesDir)
+	dd, err := detector.New()
 	if err != nil {
 		return result, err
 	}
@@ -1071,8 +1045,8 @@ func CollectParseDeviceResults() (ParserResult, error) {
 
 // clientFixtureReport matches the PHP client fixture format for reporting.
 type clientFixtureReport struct {
-	UserAgent string            `yaml:"user_agent"`
-	Headers   map[string]string `yaml:"headers"`
+	UserAgent string                `yaml:"user_agent"`
+	Headers   common.YAMLHTTPHeader `yaml:"headers"`
 	Client    struct {
 		Type          string `yaml:"type"`
 		Name          string `yaml:"name"`
@@ -1087,8 +1061,7 @@ func CollectParseClientResults() (ParserResult, error) {
 	result := ParserResult{Name: "Parse Client (Integration)"}
 	baseDir := getBaseDir()
 
-	regexesDir := filepath.Join(baseDir, "..", "regexes")
-	dd, err := detector.New(regexesDir)
+	dd, err := detector.New()
 	if err != nil {
 		return result, err
 	}
@@ -1111,8 +1084,8 @@ func CollectParseClientResults() (ParserResult, error) {
 		for i, tc := range fixtures {
 			// Build client hints if headers present
 			var ch *clienthints.ClientHints
-			if len(tc.Headers) > 0 {
-				ch = clienthints.New(tc.Headers)
+			if len(tc.Headers.Header()) > 0 {
+				ch = clienthints.New(tc.Headers.Header())
 			}
 
 			parsed := dd.Parse(tc.UserAgent, ch)
@@ -1212,15 +1185,15 @@ func (f *fullParseFixtureReport) getDevice() (typ, brand, model string) {
 	return
 }
 
-func (f *fullParseFixtureReport) getHeaders() map[string]string {
+func (f *fullParseFixtureReport) getHeaders() http.Header {
 	if f.Headers == nil {
 		return nil
 	}
 	if m, ok := f.Headers.(map[string]interface{}); ok {
-		result := make(map[string]string)
+		result := make(http.Header)
 		for k, v := range m {
 			if s, ok := v.(string); ok {
-				result[k] = s
+				result.Set(k, s)
 			}
 		}
 		if len(result) > 0 {
@@ -1234,8 +1207,7 @@ func CollectFullParseResults() (ParserResult, error) {
 	result := ParserResult{Name: "Full Parse (Integration)"}
 	baseDir := getBaseDir()
 
-	regexesDir := filepath.Join(baseDir, "..", "regexes")
-	dd, err := detector.New(regexesDir)
+	dd, err := detector.New()
 	if err != nil {
 		return result, err
 	}
@@ -1350,8 +1322,7 @@ func CollectFullParseResultsSample(n int, detectorOpts ...detector.Option) (Pars
 	result := ParserResult{Name: fmt.Sprintf("Full Parse Sample (N=%d)", n)}
 	baseDir := getBaseDir()
 
-	regexesDir := filepath.Join(baseDir, "..", "regexes")
-	dd, err := detector.New(regexesDir, detectorOpts...)
+	dd, err := detector.New(detectorOpts...)
 	if err != nil {
 		return result, err
 	}

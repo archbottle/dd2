@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/device-detector/regexes"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
@@ -21,13 +22,6 @@ type fixture struct {
 	} `yaml:"client"`
 }
 
-func getRegexesPath() string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		panic("failed to get caller info")
-	}
-	return filepath.Join(filepath.Dir(filename), "..", "..", "regexes", "client", "libraries.yml")
-}
 
 func getFixturesPath() string {
 	_, filename, _, ok := runtime.Caller(0)
@@ -52,7 +46,7 @@ func loadFixtures(t *testing.T) []fixture {
 
 func newTestFactory(t *testing.T) *ParserFactory {
 	t.Helper()
-	f, err := NewParserFactory(getRegexesPath())
+	f, err := NewParserFactory()
 	if err != nil {
 		t.Fatalf("failed to create factory: %v", err)
 	}
@@ -88,7 +82,7 @@ func TestParse(t *testing.T) {
 
 // TestStructureLibraryYml mirrors LibraryTest::testStructureLibraryYml.
 func TestStructureLibraryYml(t *testing.T) {
-	data, err := os.ReadFile(getRegexesPath())
+	data, err := regexes.FS.ReadFile("client/libraries.yml")
 	assert.NoError(t, err, "failed to read regexes")
 
 	var items []map[string]any

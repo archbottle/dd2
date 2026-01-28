@@ -1,13 +1,17 @@
-device-detector (Go)
+# dd2
 
-Go rewrite of the PHP library shipped in `php/`. Parses a User-Agent (plus optional Client Hints) into bot/client/OS/device/brand/model with ~95% compatibility with the PHP library.
+Go rewrite of the Matomo's device detector library shipped as submodule in `php/`. Parses a User-Agent (plus optional Client Hints) into bot/client/OS/device/brand/model with ~95% compatibility with the PHP library.
 
 ### How does it work?
 
-Quite slow. Uses the dclark/regexp2 package for regexes, which is a PCRE-compatible regex engine, required to be compatible with the PHP library. On top of that it uses some optimizations - it uses the RE2 regex engine for the regexec that can be compiled by it, and it uses a keyword index for fast candidate selection, not much helps unfortunately. If you need it to work quicker:
+Quite slow. Uses the dclark/regexp2 package for regexes, which is a PCRE-capable regex engine, required to be compatible with the PHP library. On top of that it uses some optimizations - it uses the RE2 regex engine for the regexes that can be compiled by it, and it uses a keyword index for fast candidate selection, not much helps unfortunately. If you need it to work quicker:
 
 - use `WithIndexOnly()` to only use the keyword index for candidate selection (no full-scan on all regexes). ~4x Faster; drops coverage to ~82%.
 - use cache - the library doesn't have it, so bring your own - ristretto is a good choice.
+
+### License
+
+It's LGPLv3 like the original library.
 
 ### Install
 
@@ -41,6 +45,7 @@ import (
 )
 
 func main() {
+	// It compiles all the regexes at startup, so make sure to reuse the detector instance.
 	dd, err := detector.New()
 	if err != nil {
 		panic(err)

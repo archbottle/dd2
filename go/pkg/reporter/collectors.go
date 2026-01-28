@@ -2,10 +2,13 @@ package reporter
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/archbottle/device-detector/pkg/bots"
@@ -45,12 +48,70 @@ func allMatch(fields []FieldDiff) bool {
 	return true
 }
 
-// safeStr returns empty string if pointer is nil
-func safeStr(m interface{}, field string) string {
-	if m == nil {
-		return ""
+// clientHintsFromHeaders extracts client-hints-related headers in deterministic order.
+// This is meant for report display/debugging and mirrors what pkg/clienthints.Factory recognizes.
+func clientHintsFromHeaders(headers map[string]string) []HeaderKV {
+	if len(headers) == 0 {
+		return nil
 	}
-	return field
+
+	// Recognized keys (normalized to lower-case, underscores -> dashes).
+	// Include both standard and PHP $_SERVER style (http- prefix), plus JS-style keys where
+	// they appear as strings in fixtures (rare but safe to include for reporting).
+	allowed := map[string]struct{}{
+		"sec-ch-ua":                        {},
+		"sec-ch-ua-mobile":                 {},
+		"sec-ch-ua-platform":               {},
+		"sec-ch-ua-platform-version":       {},
+		"sec-ch-ua-model":                  {},
+		"sec-ch-ua-full-version":           {},
+		"sec-ch-ua-full-version-list":      {},
+		"sec-ch-ua-arch":                   {},
+		"sec-ch-ua-bitness":                {},
+		"sec-ch-ua-form-factors":           {},
+		"x-requested-with":                 {},
+		"http-sec-ch-ua":                   {},
+		"http-sec-ch-ua-mobile":            {},
+		"http-sec-ch-ua-platform":          {},
+		"http-sec-ch-ua-platform-version":  {},
+		"http-sec-ch-ua-model":             {},
+		"http-sec-ch-ua-full-version":      {},
+		"http-sec-ch-ua-full-version-list": {},
+		"http-sec-ch-ua-arch":              {},
+		"http-sec-ch-ua-bitness":           {},
+		"http-sec-ch-ua-form-factors":      {},
+		"fullversionlist":                  {},
+		"platform":                         {},
+		"platformversion":                  {},
+		"mobile":                           {},
+		"model":                            {},
+		"architecture":                     {},
+		"bitness":                          {},
+		"formfactors":                      {},
+		"arch":                             {},
+		"uafullversion":                    {},
+		"app":                              {},
+	}
+
+	var out []HeaderKV
+	for k, v := range headers {
+		if v == "" {
+			continue
+		}
+		norm := strings.ToLower(strings.ReplaceAll(k, "_", "-"))
+		if _, ok := allowed[norm]; !ok {
+			continue
+		}
+		out = append(out, HeaderKV{Name: k, Value: v})
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+	})
+	return out
 }
 
 // ============================================================================
@@ -127,9 +188,10 @@ func CollectBrowserResults() (ParserResult, error) {
 		} else {
 			result.Failed++
 			result.Failures = append(result.Failures, TestFailure{
-				CaseIndex: i,
-				UserAgent: tc.UserAgent,
-				Fields:    fields,
+				CaseIndex:   i,
+				UserAgent:   tc.UserAgent,
+				ClientHints: clientHintsFromHeaders(tc.Headers),
+				Fields:      fields,
 			})
 		}
 	}
@@ -210,9 +272,10 @@ func CollectOSResults() (ParserResult, error) {
 		} else {
 			result.Failed++
 			result.Failures = append(result.Failures, TestFailure{
-				CaseIndex: i,
-				UserAgent: tc.UserAgent,
-				Fields:    fields,
+				CaseIndex:   i,
+				UserAgent:   tc.UserAgent,
+				ClientHints: clientHintsFromHeaders(tc.Headers),
+				Fields:      fields,
 			})
 		}
 	}
@@ -1263,12 +1326,177 @@ func CollectFullParseResults() (ParserResult, error) {
 				result.Failed++
 				// Limit failures stored to prevent memory bloat (only store first 100)
 				if len(result.Failures) < 100 {
+					var hints []HeaderKV
+					if len(headers) > 0 {
+						hints = clientHintsFromHeaders(headers)
+					}
 					result.Failures = append(result.Failures, TestFailure{
-						CaseIndex: i,
-						UserAgent: tc.UserAgent,
-						Fields:    fields,
+						CaseIndex:   i,
+						UserAgent:   tc.UserAgent,
+						ClientHints: hints,
+						Fields:      fields,
 					})
 				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// CollectFullParseResultsSample runs a deterministic sample of N fixtures from the full parse test.
+// Uses a fixed seed so the same N always selects the same fixtures across runs.
+func CollectFullParseResultsSample(n int, detectorOpts ...detector.Option) (ParserResult, error) {
+	result := ParserResult{Name: fmt.Sprintf("Full Parse Sample (N=%d)", n)}
+	baseDir := getBaseDir()
+
+	regexesDir := filepath.Join(baseDir, "..", "regexes")
+	dd, err := detector.New(regexesDir, detectorOpts...)
+	if err != nil {
+		return result, err
+	}
+
+	// Load fixtures from all PHP testParse fixture files
+	phpFixturesDir := filepath.Join(baseDir, "..", "..", "php", "Tests", "fixtures")
+	entries, err := os.ReadDir(phpFixturesDir)
+	if err != nil {
+		return result, err
+	}
+
+	// Collect all test cases with stable ordering (sorted by filename, then by index)
+	type testCase struct {
+		fileName  string
+		caseIndex int
+		fixture   fullParseFixtureReport
+	}
+	var allCases []testCase
+
+	// Sort filenames for deterministic ordering
+	var fileNames []string
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yml" {
+			continue
+		}
+		if entry.Name() == "bots.yml" {
+			continue // bots handled separately
+		}
+		fileNames = append(fileNames, entry.Name())
+	}
+	sort.Strings(fileNames)
+
+	// Load all fixtures and flatten
+	for _, fileName := range fileNames {
+		data, err := os.ReadFile(filepath.Join(phpFixturesDir, fileName))
+		if err != nil {
+			return result, err
+		}
+		var fixtures []fullParseFixtureReport
+		if err := yaml.Unmarshal(data, &fixtures); err != nil {
+			return result, err
+		}
+
+		for i, tc := range fixtures {
+			allCases = append(allCases, testCase{
+				fileName:  fileName,
+				caseIndex: i,
+				fixture:   tc,
+			})
+		}
+	}
+
+	// Deterministic shuffle using fixed seed
+	// Using a constant seed ensures same N always selects same fixtures
+	const fixedSeed = 42
+	rng := rand.New(rand.NewSource(fixedSeed))
+	indices := make([]int, len(allCases))
+	for i := range indices {
+		indices[i] = i
+	}
+	rng.Shuffle(len(indices), func(i, j int) {
+		indices[i], indices[j] = indices[j], indices[i]
+	})
+
+	// Take first N (or all if N > total)
+	sampleSize := n
+	if sampleSize > len(allCases) {
+		sampleSize = len(allCases)
+	}
+
+	// Run tests on sampled fixtures
+	for idx := 0; idx < sampleSize; idx++ {
+		tc := allCases[indices[idx]]
+
+		// Build client hints if headers present
+		var ch *clienthints.ClientHints
+		headers := tc.fixture.getHeaders()
+		if len(headers) > 0 {
+			ch = clienthints.New(headers)
+		}
+
+		parsed := dd.Parse(tc.fixture.UserAgent, ch)
+		info := parsed.GetFullInfo()
+
+		// Extract expected values
+		expOSName, expOSVer, expOSPlat := tc.fixture.getOS()
+		expClientType, expClientName, expClientVer, _, _ := tc.fixture.getClient()
+		expDevType, expDevBrand, expDevModel := tc.fixture.getDevice()
+		expOSFamily := tc.fixture.OSFamily
+		expBrowserFamily := tc.fixture.BrowserFamily
+
+		// Extract actual values
+		var gotOSName, gotOSVer, gotOSPlat, gotOSFamily string
+		if info.OS != nil {
+			gotOSName = info.OS.Name
+			gotOSVer = info.OS.Version
+			gotOSPlat = info.OS.Platform
+		}
+		gotOSFamily = info.OSFamily
+
+		var gotClientType, gotClientName, gotClientVer string
+		if info.Client != nil {
+			gotClientType = info.Client.Type
+			gotClientName = info.Client.Name
+			gotClientVer = info.Client.Version
+		}
+		gotBrowserFamily := info.BrowserFamily
+
+		var gotDevType, gotDevBrand, gotDevModel string
+		if info.Device != nil {
+			gotDevType = info.Device.Type
+			gotDevBrand = info.Device.Brand
+			gotDevModel = info.Device.Model
+		}
+
+		fields := []FieldDiff{
+			{Name: "OS.Name", Expected: expOSName, Actual: gotOSName, Matches: expOSName == gotOSName},
+			{Name: "OS.Version", Expected: expOSVer, Actual: gotOSVer, Matches: expOSVer == gotOSVer},
+			{Name: "OS.Platform", Expected: expOSPlat, Actual: gotOSPlat, Matches: expOSPlat == gotOSPlat},
+			{Name: "OS.Family", Expected: expOSFamily, Actual: gotOSFamily, Matches: expOSFamily == gotOSFamily},
+			{Name: "Client.Type", Expected: expClientType, Actual: gotClientType, Matches: expClientType == gotClientType},
+			{Name: "Client.Name", Expected: expClientName, Actual: gotClientName, Matches: expClientName == gotClientName},
+			{Name: "Client.Version", Expected: expClientVer, Actual: gotClientVer, Matches: expClientVer == gotClientVer},
+			{Name: "Browser.Family", Expected: expBrowserFamily, Actual: gotBrowserFamily, Matches: expBrowserFamily == gotBrowserFamily},
+			{Name: "Device.Type", Expected: expDevType, Actual: gotDevType, Matches: expDevType == gotDevType},
+			{Name: "Device.Brand", Expected: expDevBrand, Actual: gotDevBrand, Matches: expDevBrand == gotDevBrand},
+			{Name: "Device.Model", Expected: expDevModel, Actual: gotDevModel, Matches: expDevModel == gotDevModel},
+		}
+
+		if allMatch(fields) {
+			result.Passed++
+		} else {
+			result.Failed++
+			// Limit failures stored to prevent memory bloat (only store first 100)
+			if len(result.Failures) < 100 {
+				var hints []HeaderKV
+				if len(headers) > 0 {
+					hints = clientHintsFromHeaders(headers)
+				}
+				result.Failures = append(result.Failures, TestFailure{
+					CaseIndex:   tc.caseIndex,
+					UserAgent:   tc.fixture.UserAgent,
+					ClientHints: hints,
+					Fields:      fields,
+				})
 			}
 		}
 	}

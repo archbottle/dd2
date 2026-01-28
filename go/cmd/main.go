@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/archbottle/device-detector/pkg/detector"
 	"github.com/archbottle/device-detector/pkg/reporter"
 	"gopkg.in/yaml.v3"
 )
@@ -19,12 +20,22 @@ func main() {
 	// Backward compatible behavior:
 	// - If invoked with flags only (no subcommand), run the compat-report command exactly as before.
 	// - If invoked with "resources", run resource mapping/copy utilities.
-	if len(os.Args) > 1 && os.Args[1] == "resources" {
-		if err := resourcesMain(os.Args[2:]); err != nil {
-			fmt.Fprintf(os.Stderr, "resources: %v\n", err)
-			os.Exit(1)
+	// - If invoked with "sample-full", run deterministic sampled full integration test.
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "resources":
+			if err := resourcesMain(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "resources: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "sample-full":
+			if err := sampleFullMain(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "sample-full: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
-		return
 	}
 
 	if err := compatReportMain(os.Args[1:]); err != nil {
@@ -108,6 +119,68 @@ func compatReportMain(args []string) error {
 		}
 		fmt.Printf("  %-20s %4d tests, %s\n", p.Name, p.Passed+p.Failed, status)
 	}
+	return nil
+}
+
+func sampleFullMain(args []string) error {
+	fs := flag.NewFlagSet("sample-full", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	nFlag := fs.Int("n", 0, "Number of fixtures to sample (required)")
+	indexOnly := fs.Bool("index-only", false, "Use index-only mode (no full scan fallback)")
+	re2Only := fs.Bool("re2-only", false, "Use RE2-only mode (skip patterns that can't compile with RE2)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *nFlag <= 0 {
+		return fmt.Errorf("-n must be a positive integer")
+	}
+
+	// Build detector options based on flags
+	var detectorOpts []detector.Option
+	if *indexOnly {
+		detectorOpts = append(detectorOpts, detector.WithIndexOnly())
+	}
+	if *re2Only {
+		detectorOpts = append(detectorOpts, detector.WithRe2Only())
+	}
+
+	modeDesc := "full compatibility"
+	if *indexOnly && *re2Only {
+		modeDesc = "index-only + RE2-only"
+	} else if *indexOnly {
+		modeDesc = "index-only"
+	} else if *re2Only {
+		modeDesc = "RE2-only"
+	}
+
+	fmt.Printf("Running sampled full integration test (N=%d, mode=%s)...\n", *nFlag, modeDesc)
+	result, err := reporter.CollectFullParseResultsSample(*nFlag, detectorOpts...)
+	if err != nil {
+		return fmt.Errorf("error collecting sample results: %w", err)
+	}
+
+	total := result.Passed + result.Failed
+	fmt.Printf("\nResults: %d passed, %d failed (%.1f%%)\n",
+		result.Passed,
+		result.Failed,
+		result.Percent(),
+	)
+
+	if result.Failed > 0 {
+		fmt.Printf("\nFirst %d failures:\n", len(result.Failures))
+		for _, f := range result.Failures {
+			fmt.Printf("  Case #%d: %s\n", f.CaseIndex, f.UserAgent)
+			for _, field := range f.Fields {
+				if !field.Matches {
+					fmt.Printf("    %s: expected %q, got %q\n", field.Name, field.Expected, field.Actual)
+				}
+			}
+		}
+		return fmt.Errorf("%d out of %d tests failed", result.Failed, total)
+	}
+
+	fmt.Printf("\nAll %d sampled tests passed!\n", total)
 	return nil
 }
 

@@ -24,7 +24,7 @@ type ParserFactory struct {
 }
 
 // NewParserFactory creates a factory by loading and compiling regexes from a YAML file.
-func NewParserFactory(regexesPath string) (*ParserFactory, error) {
+func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
 	// #nosec G304 -- regexesPath is provided by the library caller.
 	data, err := os.ReadFile(regexesPath)
 	if err != nil {
@@ -36,6 +36,9 @@ func NewParserFactory(regexesPath string) (*ParserFactory, error) {
 		return nil, fmt.Errorf("parsing regexes YAML: %w", err)
 	}
 
+	cfg := common.ApplyFactoryOptions(opts)
+	compiler := common.NewRegexCompiler(cfg.RegexMode)
+
 	f := &ParserFactory{
 		regexes:  entries,
 		compiled: make(map[string]common.UniversalRegexSubmatch),
@@ -45,7 +48,7 @@ func NewParserFactory(regexesPath string) (*ParserFactory, error) {
 	f.buildKeywordIndex()
 
 	// Pre-compile all regexes
-	if err := f.compileAll(); err != nil {
+	if err := f.compileAll(compiler, cfg.RegexMode); err != nil {
 		return nil, err
 	}
 
@@ -63,10 +66,14 @@ func (f *ParserFactory) buildKeywordIndex() {
 }
 
 // compileAll pre-compiles all regex patterns.
-func (f *ParserFactory) compileAll() error {
+func (f *ParserFactory) compileAll(compiler *common.RegexCompiler, regexMode common.RegexMode) error {
 	// Pre-compile individual patterns
 	for _, entry := range f.regexes {
-		if err := f.compilePattern(entry.Regex); err != nil {
+		if err := f.compilePattern(entry.Regex, compiler); err != nil {
+			// In Re2Only mode, skip patterns that can't compile
+			if regexMode == common.Re2Only {
+				continue
+			}
 			return fmt.Errorf("compiling pattern %q: %w", entry.Regex, err)
 		}
 	}
@@ -75,12 +82,12 @@ func (f *ParserFactory) compileAll() error {
 }
 
 // compilePattern compiles a single pattern using the appropriate engine.
-func (f *ParserFactory) compilePattern(pattern string) error {
+func (f *ParserFactory) compilePattern(pattern string, compiler *common.RegexCompiler) error {
 	wrapped := wrapPattern(pattern)
 
-	re, err := common.CompileRegexSubmatch(wrapped)
+	re, err := compiler.CompileSubmatch(wrapped)
 	if err != nil {
-		return fmt.Errorf("compiling pattern %q: %w", pattern, err)
+		return err
 	}
 	f.compiled[pattern] = re
 

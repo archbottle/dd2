@@ -42,6 +42,7 @@ func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*Parser
 	}
 
 	cfg := common.ApplyFactoryOptions(opts)
+	compiler := common.NewRegexCompiler(cfg.RegexMode)
 	f := &ParserFactory{
 		entries: entries,
 		mode:    cfg.CandidateMode,
@@ -52,7 +53,7 @@ func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*Parser
 	}
 	f.buildKeywordIndex()
 
-	if err := f.compileAll(); err != nil {
+	if err := f.compileAll(compiler, cfg.RegexMode); err != nil {
 		return nil, err
 	}
 
@@ -76,7 +77,7 @@ func (f *ParserFactory) buildKeywordIndex() {
 	f.index = common.NewPatternIndex(f.patterns)
 }
 
-func (f *ParserFactory) compileAll() error {
+func (f *ParserFactory) compileAll(compiler *common.RegexCompiler, regexMode common.RegexMode) error {
 	for i := range f.entries {
 		e := &f.entries[i]
 		if e.Regex == "" {
@@ -84,8 +85,12 @@ func (f *ParserFactory) compileAll() error {
 		}
 
 		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
-		re, err := common.CompileRegexSubmatch(wrapped)
+		re, err := compiler.CompileSubmatch(wrapped)
 		if err != nil {
+			// In Re2Only mode, skip patterns that can't compile
+			if regexMode == common.Re2Only {
+				continue
+			}
 			return fmt.Errorf("compiling library pattern (%s): %w", e.Name, err)
 		}
 		e.compiled = re

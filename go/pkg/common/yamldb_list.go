@@ -12,8 +12,10 @@ type YAMLListDB[T Pattern] struct {
 
 // NewYAMLListDB builds an index and optionally compiles patterns once at init.
 // The compile callback may set compiled regex fields on the entry.
-func NewYAMLListDB[T Pattern](patterns []T, compile func(T) error, opts ...FactoryOption) (*YAMLListDB[T], error) {
+// In Re2Only mode, compilation failures are skipped (pattern left uncompiled) instead of failing.
+func NewYAMLListDB[T Pattern](patterns []T, compile func(T, *RegexCompiler) error, opts ...FactoryOption) (*YAMLListDB[T], error) {
 	cfg := ApplyFactoryOptions(opts)
+	compiler := NewRegexCompiler(cfg.RegexMode)
 	db := &YAMLListDB[T]{
 		Patterns: patterns,
 		Mode:     cfg.CandidateMode,
@@ -23,7 +25,11 @@ func NewYAMLListDB[T Pattern](patterns []T, compile func(T) error, opts ...Facto
 	}
 	if compile != nil {
 		for _, p := range patterns {
-			if err := compile(p); err != nil {
+			if err := compile(p, compiler); err != nil {
+				// In Re2Only mode, skip patterns that can't compile instead of failing
+				if cfg.RegexMode == Re2Only {
+					continue
+				}
 				return nil, err
 			}
 		}

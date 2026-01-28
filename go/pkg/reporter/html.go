@@ -129,8 +129,14 @@ const htmlTemplate = `<!DOCTYPE html>
             padding: 8px 12px;
             border-radius: 4px;
             margin-bottom: 12px;
-            word-break: break-all;
+            white-space: pre-wrap;
+            word-break: break-word;
             color: #24292e;
+        }
+        .hints-label {
+            font-size: 12px;
+            color: #666;
+            margin: 6px 0 6px;
         }
         .diff-table {
             width: 100%;
@@ -225,6 +231,11 @@ const htmlTemplate = `<!DOCTYPE html>
                 <div class="failure-item">
                     <div class="failure-header">Case #{{.CaseIndex}}</div>
                     <div class="ua-string">{{.UserAgent}}</div>
+                    {{if .ClientHints}}
+                    <div class="hints-label">Client hints</div>
+                    <div class="ua-string">{{range .ClientHints}}{{.Name}}: {{.Value}}
+{{end}}</div>
+                    {{end}}
                     <table class="diff-table">
                         <tr>
                             <th class="field">Field</th>

@@ -44,12 +44,12 @@ func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*Parser
 		f.patterns[i] = &f.entries[i]
 	}
 
-	db, err := common.NewYAMLListDB(f.patterns, func(e *Entry) error {
+	db, err := common.NewYAMLListDB(f.patterns, func(e *Entry, compiler *common.RegexCompiler) error {
 		if e == nil || e.Regex == "" {
 			return nil
 		}
 		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
-		re, err := common.CompileRegexSubmatch(wrapped)
+		re, err := compiler.CompileSubmatch(wrapped)
 		if err != nil {
 			return fmt.Errorf("compiling mobile app pattern (%s): %w", e.Name, err)
 		}

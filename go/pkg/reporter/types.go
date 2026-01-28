@@ -15,11 +15,20 @@ type FieldDiff struct {
 	Matches  bool   `json:"matches"`
 }
 
+// HeaderKV represents a name/value header pair (used for client hints rendering).
+// Stored as a slice (not a map) to keep output deterministic.
+type HeaderKV struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // TestFailure represents a single failed test case
 type TestFailure struct {
-	CaseIndex int         `json:"case_index"`
-	UserAgent string      `json:"user_agent"`
-	Fields    []FieldDiff `json:"fields"`
+	CaseIndex int    `json:"case_index"`
+	UserAgent string `json:"user_agent"`
+	// ClientHints contains the request headers used as client hints (if present in fixture).
+	ClientHints []HeaderKV  `json:"client_hints,omitempty"`
+	Fields      []FieldDiff `json:"fields"`
 }
 
 // ParserResult aggregates results for one parser type

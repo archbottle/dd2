@@ -52,12 +52,12 @@ func NewParserFactory(browsersPath, enginePath, hintsPath string, opts ...common
 		f.patterns[i] = &f.entries[i]
 	}
 
-	db, err := common.NewYAMLListDB(f.patterns, func(e *Entry) error {
+	db, err := common.NewYAMLListDB(f.patterns, func(e *Entry, compiler *common.RegexCompiler) error {
 		if e == nil || e.Regex == "" {
 			return nil
 		}
 		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
-		re, compileErr := common.CompileRegexSubmatch(wrapped)
+		re, compileErr := compiler.CompileSubmatch(wrapped)
 		if compileErr != nil {
 			return fmt.Errorf("compiling browser pattern (%s): %w", e.Name, compileErr)
 		}

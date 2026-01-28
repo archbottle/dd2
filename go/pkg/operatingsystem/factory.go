@@ -46,12 +46,12 @@ func NewParserFactory(ossPath string, opts ...common.FactoryOption) (*ParserFact
 		f.patterns[i] = &f.entries[i]
 	}
 
-	db, err := common.NewYAMLListDB(f.patterns, func(e *Entry) error {
+	db, err := common.NewYAMLListDB(f.patterns, func(e *Entry, compiler *common.RegexCompiler) error {
 		if e == nil || e.Regex == "" {
 			return nil
 		}
 		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
-		re, compileErr := common.CompileRegexSubmatch(wrapped)
+		re, compileErr := compiler.CompileSubmatch(wrapped)
 		if compileErr != nil {
 			return fmt.Errorf("compiling OS pattern (%s): %w", e.Name, compileErr)
 		}
@@ -63,7 +63,7 @@ func NewParserFactory(ossPath string, opts ...common.FactoryOption) (*ParserFact
 				continue
 			}
 			vWrapped := common.WrapDeviceDetectorPattern(e.Versions[i].Regex)
-			vRe, vErr := common.CompileRegexSubmatch(vWrapped)
+			vRe, vErr := compiler.CompileSubmatch(vWrapped)
 			if vErr != nil {
 				return fmt.Errorf("compiling OS version pattern (%s / %s): %w", e.Name, e.Versions[i].Regex, vErr)
 			}

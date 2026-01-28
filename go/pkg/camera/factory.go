@@ -59,7 +59,7 @@ type ParserFactory struct {
 }
 
 // NewParserFactory creates a factory by loading and compiling camera regexes from a YAML file.
-func NewParserFactory(regexesPath string) (*ParserFactory, error) {
+func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
 	// #nosec G304 -- regexesPath is provided by the library caller.
 	data, err := os.ReadFile(regexesPath)
 	if err != nil {
@@ -71,10 +71,12 @@ func NewParserFactory(regexesPath string) (*ParserFactory, error) {
 		return nil, err
 	}
 
+	cfg := common.ApplyFactoryOptions(opts)
+	compiler := common.NewRegexCompiler(cfg.RegexMode)
 	f := &ParserFactory{patterns: patterns}
 	f.buildKeywordIndex()
 
-	if err := f.compileAll(); err != nil {
+	if err := f.compileAll(compiler, cfg.RegexMode); err != nil {
 		return nil, err
 	}
 
@@ -124,15 +126,19 @@ func (f *ParserFactory) candidatesFor(ua string) []*brandPattern {
 	return cands
 }
 
-func (f *ParserFactory) compileAll() error {
+func (f *ParserFactory) compileAll(compiler *common.RegexCompiler, regexMode common.RegexMode) error {
 	for _, bp := range f.patterns {
 		if bp == nil {
 			continue
 		}
 
 		wrapped := common.WrapDeviceDetectorPattern(bp.Regex)
-		re, err := common.CompileRegexSubmatch(wrapped)
+		re, err := compiler.CompileSubmatch(wrapped)
 		if err != nil {
+			// In Re2Only mode, skip patterns that can't compile
+			if regexMode == common.Re2Only {
+				continue
+			}
 			return fmt.Errorf("compiling brand pattern (%s): %w", bp.Brand, err)
 		}
 		bp.compiled = re
@@ -140,8 +146,12 @@ func (f *ParserFactory) compileAll() error {
 		for i := range bp.Models {
 			mp := &bp.Models[i]
 			wrappedModel := common.WrapDeviceDetectorPattern(mp.Regex)
-			mre, err := common.CompileRegexSubmatch(wrappedModel)
+			mre, err := compiler.CompileSubmatch(wrappedModel)
 			if err != nil {
+				// In Re2Only mode, skip model patterns that can't compile
+				if regexMode == common.Re2Only {
+					continue
+				}
 				return fmt.Errorf("compiling model pattern (%s / %s): %w", bp.Brand, mp.Regex, err)
 			}
 			mp.compiled = mre

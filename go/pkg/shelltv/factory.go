@@ -13,13 +13,20 @@ type ParserFactory struct {
 }
 
 // NewParserFactory creates a factory with all regexes compiled once.
-func NewParserFactory() (*ParserFactory, error) {
+func NewParserFactory(opts ...common.FactoryOption) (*ParserFactory, error) {
+	cfg := common.ApplyFactoryOptions(opts)
+	compiler := common.NewRegexCompiler(cfg.RegexMode)
+
 	// PHP: '[a-z]+[ _]Shell[ _]\w{6}|tclwebkit(\d+[.\d]*)'
 	raw := `[a-z]+[ _]Shell[ _]\w{6}|tclwebkit(\d+[.\d]*)`
 	wrapped := common.WrapDeviceDetectorPattern(raw)
 
-	re, err := common.CompileRegex(wrapped)
+	re, err := compiler.Compile(wrapped)
 	if err != nil {
+		// In Re2Only mode, return error if can't compile
+		if cfg.RegexMode == common.Re2Only {
+			return nil, fmt.Errorf("compiling isShellTv regex (RE2-only mode): %w", err)
+		}
 		return nil, fmt.Errorf("compiling isShellTv regex: %w", err)
 	}
 

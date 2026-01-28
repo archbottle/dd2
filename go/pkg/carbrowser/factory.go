@@ -36,6 +36,7 @@ func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*Parser
 	}
 
 	cfg := common.ApplyFactoryOptions(opts)
+	compiler := common.NewRegexCompiler(cfg.RegexMode)
 	f := &ParserFactory{
 		entries: entries,
 		mode:    cfg.CandidateMode,
@@ -43,7 +44,7 @@ func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*Parser
 
 	f.buildKeywordIndex()
 
-	if err := f.compileAll(); err != nil {
+	if err := f.compileAll(compiler, cfg.RegexMode); err != nil {
 		return nil, err
 	}
 
@@ -77,11 +78,15 @@ func (f *ParserFactory) buildKeywordIndex() {
 	f.index = common.NewPatternIndex(f.entries)
 }
 
-func (f *ParserFactory) compileAll() error {
+func (f *ParserFactory) compileAll(compiler *common.RegexCompiler, regexMode common.RegexMode) error {
 	for _, e := range f.entries {
 		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
-		re, err := common.CompileRegexSubmatch(wrapped)
+		re, err := compiler.CompileSubmatch(wrapped)
 		if err != nil {
+			// In Re2Only mode, skip patterns that can't compile
+			if regexMode == common.Re2Only {
+				continue
+			}
 			return fmt.Errorf("compiling brand regex (%s / %q): %w", e.Brand, e.Regex, err)
 		}
 		e.compiledBrand = re
@@ -92,8 +97,12 @@ func (f *ParserFactory) compileAll() error {
 			for i := range e.Models {
 				m := e.Models[i]
 				w := common.WrapDeviceDetectorPattern(m.Regex)
-				mre, err := common.CompileRegexSubmatch(w)
+				mre, err := compiler.CompileSubmatch(w)
 				if err != nil {
+					// In Re2Only mode, skip model patterns that can't compile
+					if regexMode == common.Re2Only {
+						continue
+					}
 					return fmt.Errorf("compiling model regex (%s / %q): %w", e.Brand, m.Regex, err)
 				}
 				e.compiledModels[i] = mre

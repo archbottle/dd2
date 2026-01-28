@@ -111,3 +111,56 @@ func WrapDeviceDetectorPattern(pattern string) string {
 	pattern = strings.ReplaceAll(pattern, "/", `\/`)
 	return `(?:^|[^A-Z0-9_-]|[^A-Z0-9-]_|sprd-|MZ-)(?:` + pattern + `)`
 }
+
+// RegexCompiler provides regex compilation with configurable engine selection.
+type RegexCompiler struct {
+	mode RegexMode
+}
+
+// NewRegexCompiler creates a compiler with the specified regex mode.
+func NewRegexCompiler(mode RegexMode) *RegexCompiler {
+	return &RegexCompiler{mode: mode}
+}
+
+// Compile attempts to compile a pattern using the configured engine policy.
+// The wrapped pattern should already include the PHP-style prefix matching wrapper.
+func (rc *RegexCompiler) Compile(wrappedPattern string) (UniversalRegex, error) {
+	// Try RE2 first (fast path)
+	re, err := regexp.Compile("(?i)" + wrappedPattern)
+	if err == nil {
+		return NewRE2Regex(re), nil
+	}
+
+	// If RE2-only mode, don't fall back to regexp2
+	if rc.mode == Re2Only {
+		return nil, err
+	}
+
+	// Fall back to regexp2 for PCRE-like features
+	re2x, err := regexp2.Compile(wrappedPattern, regexp2.IgnoreCase)
+	if err != nil {
+		return nil, err
+	}
+	return NewRegexp2Regex(re2x), nil
+}
+
+// CompileSubmatch is like Compile, but returns a value that can also provide capture groups.
+func (rc *RegexCompiler) CompileSubmatch(wrappedPattern string) (UniversalRegexSubmatch, error) {
+	// Try RE2 first (fast path)
+	re, err := regexp.Compile("(?i)" + wrappedPattern)
+	if err == nil {
+		return re2Regex{re: re}, nil
+	}
+
+	// If RE2-only mode, don't fall back to regexp2
+	if rc.mode == Re2Only {
+		return nil, err
+	}
+
+	// Fall back to regexp2 for PCRE-like features
+	re2x, err := regexp2.Compile(wrappedPattern, regexp2.IgnoreCase)
+	if err != nil {
+		return nil, err
+	}
+	return regexp2Regex{re: re2x}, nil
+}

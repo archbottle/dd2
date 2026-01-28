@@ -20,7 +20,7 @@ type ParserFactory struct {
 }
 
 // NewParserFactory creates a factory by loading and compiling regexes from a YAML file.
-func NewParserFactory(regexesPath string) (*ParserFactory, error) {
+func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
 	// #nosec G304 -- regexesPath is provided by the library caller.
 	data, err := os.ReadFile(regexesPath)
 	if err != nil {
@@ -32,10 +32,12 @@ func NewParserFactory(regexesPath string) (*ParserFactory, error) {
 		return nil, fmt.Errorf("parsing regexes YAML: %w", err)
 	}
 
+	cfg := common.ApplyFactoryOptions(opts)
+	compiler := common.NewRegexCompiler(cfg.RegexMode)
 	f := &ParserFactory{entries: entries}
 	f.buildKeywordIndex()
 
-	if err := f.compileAll(); err != nil {
+	if err := f.compileAll(compiler, cfg.RegexMode); err != nil {
 		return nil, err
 	}
 
@@ -63,7 +65,7 @@ func (f *ParserFactory) buildKeywordIndex() {
 	f.index = common.NewPatternIndex(patterns)
 }
 
-func (f *ParserFactory) compileAll() error {
+func (f *ParserFactory) compileAll(compiler *common.RegexCompiler, regexMode common.RegexMode) error {
 	for i := range f.entries {
 		e := &f.entries[i]
 		if e.Regex == "" {
@@ -71,8 +73,12 @@ func (f *ParserFactory) compileAll() error {
 		}
 
 		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
-		re, err := common.CompileRegexSubmatch(wrapped)
+		re, err := compiler.CompileSubmatch(wrapped)
 		if err != nil {
+			// In Re2Only mode, skip patterns that can't compile
+			if regexMode == common.Re2Only {
+				continue
+			}
 			return fmt.Errorf("compiling feed reader pattern (%s): %w", e.Name, err)
 		}
 		e.compiled = re

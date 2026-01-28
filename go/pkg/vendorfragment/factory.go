@@ -22,7 +22,7 @@ type ParserFactory struct {
 }
 
 // NewParserFactory creates a factory by loading and compiling vendor fragment regexes from a YAML file.
-func NewParserFactory(regexesPath string) (*ParserFactory, error) {
+func NewParserFactory(regexesPath string, opts ...common.FactoryOption) (*ParserFactory, error) {
 	// #nosec G304 -- regexesPath is provided by the library caller.
 	data, err := os.ReadFile(regexesPath)
 	if err != nil {
@@ -34,12 +34,14 @@ func NewParserFactory(regexesPath string) (*ParserFactory, error) {
 		return nil, fmt.Errorf("parsing vendorfragments YAML: %w", err)
 	}
 
+	cfg := common.ApplyFactoryOptions(opts)
+	compiler := common.NewRegexCompiler(cfg.RegexMode)
 	f := &ParserFactory{
 		groups:   groups,
 		compiled: make(map[string]common.UniversalRegex),
 	}
 
-	if err := f.compileAll(); err != nil {
+	if err := f.compileAll(compiler, cfg.RegexMode); err != nil {
 		return nil, err
 	}
 
@@ -59,7 +61,7 @@ func (f *ParserFactory) NewParser(ua string, opts ...Option) *Parser {
 }
 
 // compileAll pre-compiles all vendor fragment patterns.
-func (f *ParserFactory) compileAll() error {
+func (f *ParserFactory) compileAll(compiler *common.RegexCompiler, regexMode common.RegexMode) error {
 	for _, g := range f.groups {
 		for _, raw := range g.Regexes {
 			if _, ok := f.compiled[raw]; ok {
@@ -70,8 +72,12 @@ func (f *ParserFactory) compileAll() error {
 			// i.e. require the fragment followed by a non-alphanumeric separator.
 			// Then wrap with AbstractParser boundary logic.
 			wrapped := common.WrapDeviceDetectorPattern(raw + `[^a-z0-9]+`)
-			re, err := common.CompileRegex(wrapped)
+			re, err := compiler.Compile(wrapped)
 			if err != nil {
+				// In Re2Only mode, skip patterns that can't compile
+				if regexMode == common.Re2Only {
+					continue
+				}
 				return fmt.Errorf("compiling vendor fragment %q: %w", raw, err)
 			}
 			f.compiled[raw] = re

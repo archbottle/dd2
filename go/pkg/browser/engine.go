@@ -57,12 +57,12 @@ func NewEngineParser(regexesPath string, opts ...common.FactoryOption) (*EngineP
 		p.patterns[i] = &p.entries[i]
 	}
 
-	db, err := common.NewYAMLListDB(p.patterns, func(e *EngineEntry) error {
+	db, err := common.NewYAMLListDB(p.patterns, func(e *EngineEntry, compiler *common.RegexCompiler) error {
 		if e == nil || e.Regex == "" {
 			return nil
 		}
 		wrapped := common.WrapDeviceDetectorPattern(e.Regex)
-		re, compileErr := common.CompileRegexSubmatch(wrapped)
+		re, compileErr := compiler.CompileSubmatch(wrapped)
 		if compileErr != nil {
 			return fmt.Errorf("compiling engine pattern (%s): %w", e.Name, compileErr)
 		}

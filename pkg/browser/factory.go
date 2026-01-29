@@ -3,9 +3,9 @@ package browser
 import (
 	"fmt"
 
-	"github.com/archbottle/device-detector/pkg/clienthints"
-	"github.com/archbottle/device-detector/pkg/common"
-	"github.com/archbottle/device-detector/regexes"
+	"github.com/archbottle/dd2/pkg/clienthints"
+	"github.com/archbottle/dd2/pkg/common"
+	"github.com/archbottle/dd2/regexes"
 	"gopkg.in/yaml.v3"
 )
 

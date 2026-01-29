@@ -16,10 +16,10 @@ It's LGPLv3 like the original library.
 ### Install
 
 ```bash
-go get github.com/archbottle/device-detector@latest
+go get github.com/archbottle/dd2@latest
 ```
 
-Import path for the main API: `github.com/archbottle/device-detector/pkg/detector`.
+Import path for the main API: `github.com/archbottle/dd2/pkg/detector`.
 
 ### High-level library API (what you probably want)
 
@@ -40,8 +40,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/archbottle/device-detector/pkg/clienthints"
-	"github.com/archbottle/device-detector/pkg/detector"
+	"github.com/archbottle/dd2/pkg/clienthints"
+	"github.com/archbottle/dd2/pkg/detector"
 )
 
 func main() {
@@ -94,7 +94,7 @@ Passed to `detector.New(...)`:
 
 ### Client Hints
 
-Package: `github.com/archbottle/device-detector/pkg/clienthints`
+Package: `github.com/archbottle/dd2/pkg/clienthints`
 
 - **`clienthints.New(http.Header)`**: build hints from request headers.
 - **`clienthints.Factory(map[string]interface{})`**: accepts:

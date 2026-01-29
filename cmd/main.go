@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/archbottle/device-detector/pkg/detector"
-	"github.com/archbottle/device-detector/pkg/reporter"
+	"github.com/archbottle/dd2/pkg/detector"
+	"github.com/archbottle/dd2/pkg/reporter"
 	"gopkg.in/yaml.v3"
 )
 

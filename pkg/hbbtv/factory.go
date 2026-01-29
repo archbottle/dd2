@@ -3,7 +3,7 @@ package hbbtv
 import (
 	"fmt"
 
-	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/dd2/pkg/common"
 )
 
 // ParserFactory holds pre-compiled matchers and creates Parser instances.

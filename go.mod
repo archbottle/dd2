@@ -1,4 +1,4 @@
-module github.com/archbottle/device-detector
+module github.com/archbottle/dd2
 
 go 1.25.1
 

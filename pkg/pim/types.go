@@ -1,7 +1,7 @@
 // Package pim implements the PIM client parser.
 package pim
 
-import "github.com/archbottle/device-detector/pkg/common"
+import "github.com/archbottle/dd2/pkg/common"
 
 // Entry represents a single PIM definition from the YAML regex file.
 type Entry struct {

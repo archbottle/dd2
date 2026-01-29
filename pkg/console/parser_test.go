@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/dd2/pkg/common"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
@@ -20,7 +20,6 @@ type fixtureCase struct {
 		Model string `yaml:"model"`
 	} `yaml:"device"`
 }
-
 
 func getFixturesPath() string {
 	_, filename, _, ok := runtime.Caller(0)

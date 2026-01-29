@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/archbottle/device-detector/pkg/common"
-	"github.com/archbottle/device-detector/regexes"
+	"github.com/archbottle/dd2/pkg/common"
+	"github.com/archbottle/dd2/regexes"
 	"gopkg.in/yaml.v3"
 )
 

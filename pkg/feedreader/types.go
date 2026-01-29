@@ -1,7 +1,7 @@
 // Package feedreader implements the FeedReader client parser.
 package feedreader
 
-import "github.com/archbottle/device-detector/pkg/common"
+import "github.com/archbottle/dd2/pkg/common"
 
 // Entry represents a single feed reader definition from the YAML regex file.
 type Entry struct {

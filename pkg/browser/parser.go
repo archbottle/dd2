@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/archbottle/device-detector/pkg/clienthints"
-	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/dd2/pkg/clienthints"
+	"github.com/archbottle/dd2/pkg/common"
 )
 
 // Pre-compiled regex patterns for Parse() - compiled once on first use

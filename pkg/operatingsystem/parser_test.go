@@ -8,15 +8,15 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/archbottle/device-detector/pkg/clienthints"
-	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/dd2/pkg/clienthints"
+	"github.com/archbottle/dd2/pkg/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
 type fixture struct {
-	UserAgent string                 `yaml:"user_agent"`
+	UserAgent string                `yaml:"user_agent"`
 	Headers   common.YAMLHTTPHeader `yaml:"headers"`
 	OS        struct {
 		Name      string `yaml:"name"`
@@ -26,7 +26,6 @@ type fixture struct {
 		Family    string `yaml:"family"`
 	} `yaml:"os"`
 }
-
 
 func getFixturesPath() string {
 	_, filename, _, ok := runtime.Caller(0)
@@ -63,7 +62,7 @@ func TestParse(t *testing.T) {
 	factory := newTestFactory(t)
 	fixtures := loadFixtures(t)
 
-		for i, tc := range fixtures {
+	for i, tc := range fixtures {
 		t.Run("case_"+strconv.Itoa(i), func(t *testing.T) {
 			var opts []Option
 			if len(tc.Headers.Header()) > 0 {

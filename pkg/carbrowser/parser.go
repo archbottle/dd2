@@ -1,7 +1,7 @@
 package carbrowser
 
 import (
-	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/dd2/pkg/common"
 )
 
 // Parser parses a single user agent for car browser information.

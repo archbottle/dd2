@@ -1,7 +1,7 @@
 // Package mobileapp implements the MobileApp client parser.
 package mobileapp
 
-import "github.com/archbottle/device-detector/pkg/common"
+import "github.com/archbottle/dd2/pkg/common"
 
 // Entry represents a single mobile app definition from the YAML regex file.
 type Entry struct {

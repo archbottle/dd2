@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/archbottle/device-detector/pkg/common"
-	"github.com/archbottle/device-detector/regexes"
+	"github.com/archbottle/dd2/pkg/common"
+	"github.com/archbottle/dd2/regexes"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
@@ -21,7 +21,6 @@ type fixture struct {
 		Version string `yaml:"version"`
 	} `yaml:"client"`
 }
-
 
 func getFixturesPath() string {
 	_, filename, _, ok := runtime.Caller(0)

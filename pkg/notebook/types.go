@@ -1,6 +1,6 @@
 package notebook
 
-import "github.com/archbottle/device-detector/pkg/common"
+import "github.com/archbottle/dd2/pkg/common"
 
 // Match is the parsed device result for notebook detection.
 // Mirrors the PHP test fixtures expectation: {type, brand, model}.

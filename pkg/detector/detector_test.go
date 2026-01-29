@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/archbottle/device-detector/pkg/clienthints"
-	"github.com/archbottle/device-detector/pkg/common"
+	"github.com/archbottle/dd2/pkg/clienthints"
+	"github.com/archbottle/dd2/pkg/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -18,9 +18,9 @@ import (
 
 // clientFixture matches the PHP client fixture format (browser, feed_reader, etc.).
 type clientFixture struct {
-	UserAgent string                 `yaml:"user_agent"`
+	UserAgent string                `yaml:"user_agent"`
 	Headers   common.YAMLHTTPHeader `yaml:"headers"`
-	Client    clientExpect           `yaml:"client"`
+	Client    clientExpect          `yaml:"client"`
 }
 
 type clientExpect struct {
@@ -157,7 +157,6 @@ type typeMethodFixture struct {
 	UserAgent string `yaml:"user_agent"`
 	Check     []bool `yaml:"check"`
 }
-
 
 func loadTypeMethodFixtures(t *testing.T) []typeMethodFixture {
 	_, filename, _, ok := runtime.Caller(0)

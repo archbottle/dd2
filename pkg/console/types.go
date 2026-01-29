@@ -1,6 +1,6 @@
 package console
 
-import "github.com/archbottle/device-detector/pkg/common"
+import "github.com/archbottle/dd2/pkg/common"
 
 // Match is the parsed device result for console detection.
 // Mirrors the PHP test fixtures expectation: {type, brand, model}.

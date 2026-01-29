@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/archbottle/device-detector/pkg/clienthints"
+	"github.com/archbottle/dd2/pkg/clienthints"
 )
 
 // Pre-compiled regexes for heuristics (compiled once at package init).

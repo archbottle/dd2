@@ -1,6 +1,6 @@
 package mobile
 
-import "github.com/archbottle/device-detector/pkg/common"
+import "github.com/archbottle/dd2/pkg/common"
 
 // Entry represents a brand's device patterns from mobiles.yml.
 // Each entry contains a brand-level regex and optional model-specific sub-patterns.

@@ -2,15 +2,18 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/archbottle/dd2/pkg/clienthints"
 	"github.com/archbottle/dd2/pkg/detector"
 	"github.com/archbottle/dd2/pkg/reporter"
 	"gopkg.in/yaml.v3"
@@ -32,6 +35,12 @@ func main() {
 		case "sample-full":
 			if err := sampleFullMain(os.Args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "sample-full: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "serve":
+			if err := serveMain(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "serve: %v\n", err)
 				os.Exit(1)
 			}
 			return
@@ -182,6 +191,115 @@ func sampleFullMain(args []string) error {
 
 	fmt.Printf("\nAll %d sampled tests passed!\n", total)
 	return nil
+}
+
+func serveMain(args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	listen := fs.String("listen", ":8080", "Listen address (e.g. :8080 or 127.0.0.1:8080)")
+	path := fs.String("path", "/detect", "HTTP path for detection endpoint")
+	indexOnly := fs.Bool("index-only", false, "Use index-only mode (no full scan fallback)")
+	re2Only := fs.Bool("re2-only", false, "Use RE2-only mode (skip patterns that can't compile with RE2)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	var detectorOpts []detector.Option
+	if *indexOnly {
+		detectorOpts = append(detectorOpts, detector.WithIndexOnly())
+	}
+	if *re2Only {
+		detectorOpts = append(detectorOpts, detector.WithRe2Only())
+	}
+
+	dd, err := detector.New(detectorOpts...)
+	if err != nil {
+		return err
+	}
+
+	// Minimal plain-text homepage for quick manual use.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, "dd2 serve\n\n")
+		fmt.Fprintf(w, "GET %s\n", *path)
+		fmt.Fprintf(w, "  Uses request headers: User-Agent and Sec-CH-* (plus X-Requested-With)\n")
+		fmt.Fprintf(w, "  Returns: text/plain (pretty JSON)\n")
+	})
+
+	mux.HandleFunc(*path, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+		ua := r.Header.Get("User-Agent")
+		if ua == "" {
+			http.Error(w, "missing User-Agent header", http.StatusBadRequest)
+			return
+		}
+
+		ch := clienthints.New(r.Header)
+		res := dd.Parse(ua, ch)
+
+		type detectResponse struct {
+			UserAgent string            `json:"user_agent"`
+			Headers   map[string]string `json:"headers,omitempty"`
+
+			IsBot      bool `json:"is_bot"`
+			IsMobile   bool `json:"is_mobile"`
+			IsDesktop  bool `json:"is_desktop"`
+			IsTablet   bool `json:"is_tablet"`
+			IsTV       bool `json:"is_tv"`
+			IsWearable bool `json:"is_wearable"`
+
+			Bot      any                `json:"bot,omitempty"`
+			FullInfo *detector.FullInfo `json:"full_info"`
+		}
+
+		out := detectResponse{
+			UserAgent: ua,
+			Headers:   interestingHeaders(r.Header),
+
+			IsBot:      res.IsBot(),
+			IsMobile:   res.IsMobile(),
+			IsDesktop:  res.IsDesktop(),
+			IsTablet:   res.IsTablet(),
+			IsTV:       res.IsTV(),
+			IsWearable: res.IsWearable(),
+
+			Bot:      res.GetBot(),
+			FullInfo: res.GetFullInfo(),
+		}
+
+		b, err := json.MarshalIndent(out, "", "  ")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write(append(b, '\n'))
+	})
+
+	fmt.Printf("Listening on http://%s%s\n", *listen, *path)
+	return http.ListenAndServe(*listen, mux)
+}
+
+func interestingHeaders(h http.Header) map[string]string {
+	out := map[string]string{}
+	for k, vs := range h {
+		lk := strings.ToLower(k)
+		if lk == "user-agent" || lk == "x-requested-with" || strings.HasPrefix(lk, "sec-ch-") {
+			if len(vs) == 0 {
+				continue
+			}
+			out[k] = strings.Join(vs, ", ")
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func loadJSON(path string) (*reporter.Report, error) {

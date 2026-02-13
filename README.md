@@ -162,6 +162,46 @@ Flags:
 
 Exit code is non-zero if any sampled case fails.
 
+#### `serve`
+
+Purpose: HTTP server for quick testing of device detection. Reads `User-Agent` and `Sec-CH-*` headers from incoming requests and returns full detection results as `text/plain` (pretty JSON).
+
+```bash
+# Start server on default port 8080
+go run ./cmd serve
+
+# Custom listen address and path
+go run ./cmd serve -listen 127.0.0.1:8080 -path /detect
+
+# With performance options
+go run ./cmd serve -index-only
+go run ./cmd serve -re2-only
+```
+
+Flags:
+
+- **`-listen`**: listen address (default `:8080`)
+- **`-path`**: HTTP path for detection endpoint (default `/detect`)
+- **`-index-only`**: pass `detector.WithIndexOnly()` into the detector
+- **`-re2-only`**: pass `detector.WithRe2Only()` into the detector
+
+Example request:
+
+```bash
+curl http://127.0.0.1:8080/detect \
+  -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' \
+  -H 'Sec-CH-UA: "Chromium";v="120"' \
+  -H 'Sec-CH-UA-Mobile: ?0' \
+  -H 'Sec-CH-UA-Platform: "Windows"'
+```
+
+Response includes:
+- `user_agent`: the parsed User-Agent string
+- `headers`: relevant headers (User-Agent and Sec-CH-*)
+- `is_bot`, `is_mobile`, `is_desktop`, `is_tablet`, `is_tv`, `is_wearable`: boolean flags
+- `bot`: bot information if detected (null otherwise)
+- `full_info`: complete detection result matching PHP's `getInfoFromUserAgent()` structure
+
 #### `resources`
 
 Purpose: mapping/copy utilities for YAML resources between the `php/` subtree and the `go/` subtree, tracked via `resources.yaml`.

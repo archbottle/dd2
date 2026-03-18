@@ -3,8 +3,6 @@ package common
 import (
 	"sort"
 	"strings"
-
-	"github.com/cloudflare/ahocorasick"
 )
 
 // Pattern is the interface that pattern types must implement.
@@ -20,11 +18,14 @@ type OrderedPattern interface {
 	SetPosition(int)
 }
 
-// PatternIndex provides fast keyword-based pattern lookup using Aho-Corasick.
+// PatternIndex provides fast keyword-based pattern lookup using map-based substring search.
 // T must be a pointer type that implements the Pattern interface.
 type PatternIndex[T Pattern] struct {
-	matcher      *ahocorasick.Matcher
-	keywords     []string    // keyword at index i corresponds to matcher result i
+	// Map-based substring search (replaces Aho-Corasick)
+	keywordMap  map[string]int // normalized keyword -> index in keywords slice
+	keywordLens []int          // unique keyword lengths (sorted)
+
+	keywords     []string    // keyword at index i
 	kwToPatterns map[int][]T // keyword index -> patterns that contain this keyword
 	noKeywords   []T         // patterns without extractable keywords (always included)
 	allPatterns  []T         // all patterns for fallback
@@ -41,7 +42,7 @@ type IndexStats struct {
 
 // NewPatternIndex builds an index from patterns.
 // Patterns are analyzed to extract keywords, which are then indexed
-// using the Aho-Corasick algorithm for O(n) multi-pattern matching.
+// using map-based substring search for memory-efficient multi-pattern matching.
 // If patterns implement OrderedPattern, their positions are set automatically.
 func NewPatternIndex[T Pattern](patterns []T) *PatternIndex[T] {
 	idx := &PatternIndex[T]{
@@ -80,51 +81,63 @@ func NewPatternIndex[T Pattern](patterns []T) *PatternIndex[T] {
 		}
 	}
 
-	// Build Aho-Corasick matcher if we have keywords
+	// Build map-based index
 	if len(idx.keywords) > 0 {
-		idx.matcher = ahocorasick.NewStringMatcher(idx.keywords)
+		idx.keywordMap = make(map[string]int, len(idx.keywords))
+		lenSet := make(map[int]bool)
+		for i, kw := range idx.keywords {
+			idx.keywordMap[kw] = i
+			lenSet[len(kw)] = true
+		}
+		// Store unique lengths sorted
+		for l := range lenSet {
+			idx.keywordLens = append(idx.keywordLens, l)
+		}
+		sort.Ints(idx.keywordLens)
 	}
 
 	return idx
 }
 
 // FindCandidates returns patterns that might match the given text.
-// Uses Aho-Corasick for O(n) keyword matching where n is text length.
+// Uses sliding-window map lookup per unique keyword length for memory-efficient matching.
 // Returns patterns whose keywords were found, plus all patterns without keywords.
 // If patterns implement OrderedPattern, results are sorted by original position.
 func (idx *PatternIndex[T]) FindCandidates(text string) []T {
-	if idx.matcher == nil {
-		// No keywords indexed, return all patterns
+	if len(idx.keywordMap) == 0 {
 		return idx.allPatterns
 	}
 
-	// Find all keywords present in the text - O(n) where n = len(text)
-	matchedIndices := idx.matcher.Match([]byte(strings.ToLower(text)))
+	lower := strings.ToLower(text)
+	tlen := len(lower)
 
-	if len(matchedIndices) == 0 {
-		// No keywords matched, only return patterns without keywords
-		return idx.noKeywords
-	}
-
-	// Collect unique patterns from matched keywords
+	// Find all keywords present using sliding window per unique length
 	seen := make(map[any]bool)
 	var candidates []T
 
-	for _, kwIdx := range matchedIndices {
-		for _, p := range idx.kwToPatterns[kwIdx] {
-			// Use pattern pointer as key for deduplication
-			if !seen[any(p)] {
-				seen[any(p)] = true
-				candidates = append(candidates, p)
+	for _, klen := range idx.keywordLens {
+		if klen > tlen {
+			break
+		}
+		for i := 0; i <= tlen-klen; i++ {
+			sub := lower[i : i+klen]
+			if kwIdx, ok := idx.keywordMap[sub]; ok {
+				for _, p := range idx.kwToPatterns[kwIdx] {
+					if !seen[any(p)] {
+						seen[any(p)] = true
+						candidates = append(candidates, p)
+					}
+				}
 			}
 		}
 	}
 
-	// Always include patterns without keywords
+	if len(candidates) == 0 {
+		return idx.noKeywords
+	}
+
 	candidates = append(candidates, idx.noKeywords...)
 
-	// Sort by original position if patterns support ordering
-	// This ensures first-match-wins semantics like PHP
 	if len(candidates) > 0 {
 		if _, ok := any(candidates[0]).(OrderedPattern); ok {
 			sort.Slice(candidates, func(i, j int) bool {

@@ -2,6 +2,7 @@ package detector
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/archbottle/dd2/pkg/bots"
 	"github.com/archbottle/dd2/pkg/browser"
@@ -24,26 +25,68 @@ import (
 
 // DeviceDetector is the main orchestrator for user agent parsing.
 type DeviceDetector struct {
-	// Parser factories
+	// Parser factories (lazy-initialized via sync.Once)
 	botFactory *bots.ParserFactory
-	osFactory  *operatingsystem.ParserFactory
+	botOnce    sync.Once
+	botErr     error
 
-	// Client parser factories (PHP order: FeedReader, MobileApp, MediaPlayer, PIM, Browser, Library)
-	feedReaderFactory  *feedreader.ParserFactory
-	mobileAppFactory   *mobileapp.ParserFactory
+	osFactory *operatingsystem.ParserFactory
+	osOnce    sync.Once
+	osErr     error
+
+	// Client parser factories
+	feedReaderFactory *feedreader.ParserFactory
+	feedReaderOnce    sync.Once
+	feedReaderErr     error
+
+	mobileAppFactory *mobileapp.ParserFactory
+	mobileAppOnce    sync.Once
+	mobileAppErr     error
+
 	mediaPlayerFactory *mediaplayer.ParserFactory
-	pimFactory         *pim.ParserFactory
-	browserFactory     *browser.ParserFactory
-	libraryFactory     *library.ParserFactory
+	mediaPlayerOnce    sync.Once
+	mediaPlayerErr     error
+
+	pimFactory *pim.ParserFactory
+	pimOnce    sync.Once
+	pimErr     error
+
+	browserFactory *browser.ParserFactory
+	browserOnce    sync.Once
+	browserErr     error
+
+	libraryFactory *library.ParserFactory
+	libraryOnce    sync.Once
+	libraryErr     error
 
 	// Device parser factories
-	hbbtvFactory    *hbbtv.ParserFactory
-	shelltvFactory  *shelltv.ParserFactory
+	hbbtvFactory *hbbtv.ParserFactory
+	hbbtvOnce    sync.Once
+	hbbtvErr     error
+
+	shelltvFactory *shelltv.ParserFactory
+	shelltvOnce    sync.Once
+	shelltvErr     error
+
 	notebookFactory *notebook.ParserFactory
-	consoleFactory  *console.ParserFactory
-	carFactory      *carbrowser.ParserFactory
-	cameraFactory   *camera.ParserFactory
-	mobileFactory   *mobile.ParserFactory
+	notebookOnce    sync.Once
+	notebookErr     error
+
+	consoleFactory *console.ParserFactory
+	consoleOnce    sync.Once
+	consoleErr     error
+
+	carFactory *carbrowser.ParserFactory
+	carOnce    sync.Once
+	carErr     error
+
+	cameraFactory *camera.ParserFactory
+	cameraOnce    sync.Once
+	cameraErr     error
+
+	mobileFactory *mobile.ParserFactory
+	mobileOnce    sync.Once
+	mobileErr     error
 
 	// Configuration
 	skipBotDetection      bool
@@ -91,104 +134,125 @@ func WithFactoryOptions(opts ...common.FactoryOption) Option {
 	}
 }
 
-// New creates a new DeviceDetector with all parsers loaded from embedded regex YAMLs.
+// New creates a new DeviceDetector. All parsers are loaded lazily on first use.
 func New(opts ...Option) (*DeviceDetector, error) {
 	d := &DeviceDetector{}
 	for _, opt := range opts {
 		opt(d)
 	}
-
-	var err error
-
-	// Load bot parser
-	d.botFactory, err = bots.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Load OS parser
-	d.osFactory, err = operatingsystem.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Load client parsers in PHP order: FeedReader, MobileApp, MediaPlayer, PIM, Browser, Library
-	d.feedReaderFactory, err = feedreader.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.mobileAppFactory, err = mobileapp.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.mediaPlayerFactory, err = mediaplayer.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.pimFactory, err = pim.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.browserFactory, err = browser.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.libraryFactory, err = library.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Load device parsers in PHP order:
-	// 1. HbbTv, 2. ShellTv, 3. Notebook, 4. Console, 5. CarBrowser, 6. Camera, 7. PortableMediaPlayer, 8. Mobile
-	d.hbbtvFactory, err = hbbtv.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.shelltvFactory, err = shelltv.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.notebookFactory, err = notebook.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.consoleFactory, err = console.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.carFactory, err = carbrowser.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	d.cameraFactory, err = camera.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	// 7. PortableMediaPlayer - TODO: implement when needed
-
-	// 8. Mobile - the big one (~2000 brands, handles smartphones/tablets/phablets)
-	d.mobileFactory, err = mobile.NewParserFactory(d.factoryOpts...)
-	if err != nil {
-		return nil, err
-	}
-
 	return d, nil
 }
 
 // NewDefault creates a DeviceDetector with default options (alias for New).
 func NewDefault(opts ...Option) (*DeviceDetector, error) {
 	return New(opts...)
+}
+
+// Lazy getter methods for each parser factory.
+
+func (d *DeviceDetector) getBotFactory() (*bots.ParserFactory, error) {
+	d.botOnce.Do(func() {
+		d.botFactory, d.botErr = bots.NewParserFactory(d.factoryOpts...)
+	})
+	return d.botFactory, d.botErr
+}
+
+func (d *DeviceDetector) getOSFactory() (*operatingsystem.ParserFactory, error) {
+	d.osOnce.Do(func() {
+		d.osFactory, d.osErr = operatingsystem.NewParserFactory(d.factoryOpts...)
+	})
+	return d.osFactory, d.osErr
+}
+
+func (d *DeviceDetector) getFeedReaderFactory() (*feedreader.ParserFactory, error) {
+	d.feedReaderOnce.Do(func() {
+		d.feedReaderFactory, d.feedReaderErr = feedreader.NewParserFactory(d.factoryOpts...)
+	})
+	return d.feedReaderFactory, d.feedReaderErr
+}
+
+func (d *DeviceDetector) getMobileAppFactory() (*mobileapp.ParserFactory, error) {
+	d.mobileAppOnce.Do(func() {
+		d.mobileAppFactory, d.mobileAppErr = mobileapp.NewParserFactory(d.factoryOpts...)
+	})
+	return d.mobileAppFactory, d.mobileAppErr
+}
+
+func (d *DeviceDetector) getMediaPlayerFactory() (*mediaplayer.ParserFactory, error) {
+	d.mediaPlayerOnce.Do(func() {
+		d.mediaPlayerFactory, d.mediaPlayerErr = mediaplayer.NewParserFactory(d.factoryOpts...)
+	})
+	return d.mediaPlayerFactory, d.mediaPlayerErr
+}
+
+func (d *DeviceDetector) getPIMFactory() (*pim.ParserFactory, error) {
+	d.pimOnce.Do(func() {
+		d.pimFactory, d.pimErr = pim.NewParserFactory(d.factoryOpts...)
+	})
+	return d.pimFactory, d.pimErr
+}
+
+func (d *DeviceDetector) getBrowserFactory() (*browser.ParserFactory, error) {
+	d.browserOnce.Do(func() {
+		d.browserFactory, d.browserErr = browser.NewParserFactory(d.factoryOpts...)
+	})
+	return d.browserFactory, d.browserErr
+}
+
+func (d *DeviceDetector) getLibraryFactory() (*library.ParserFactory, error) {
+	d.libraryOnce.Do(func() {
+		d.libraryFactory, d.libraryErr = library.NewParserFactory(d.factoryOpts...)
+	})
+	return d.libraryFactory, d.libraryErr
+}
+
+func (d *DeviceDetector) getHbbtvFactory() (*hbbtv.ParserFactory, error) {
+	d.hbbtvOnce.Do(func() {
+		d.hbbtvFactory, d.hbbtvErr = hbbtv.NewParserFactory(d.factoryOpts...)
+	})
+	return d.hbbtvFactory, d.hbbtvErr
+}
+
+func (d *DeviceDetector) getShelltvFactory() (*shelltv.ParserFactory, error) {
+	d.shelltvOnce.Do(func() {
+		d.shelltvFactory, d.shelltvErr = shelltv.NewParserFactory(d.factoryOpts...)
+	})
+	return d.shelltvFactory, d.shelltvErr
+}
+
+func (d *DeviceDetector) getNotebookFactory() (*notebook.ParserFactory, error) {
+	d.notebookOnce.Do(func() {
+		d.notebookFactory, d.notebookErr = notebook.NewParserFactory(d.factoryOpts...)
+	})
+	return d.notebookFactory, d.notebookErr
+}
+
+func (d *DeviceDetector) getConsoleFactory() (*console.ParserFactory, error) {
+	d.consoleOnce.Do(func() {
+		d.consoleFactory, d.consoleErr = console.NewParserFactory(d.factoryOpts...)
+	})
+	return d.consoleFactory, d.consoleErr
+}
+
+func (d *DeviceDetector) getCarFactory() (*carbrowser.ParserFactory, error) {
+	d.carOnce.Do(func() {
+		d.carFactory, d.carErr = carbrowser.NewParserFactory(d.factoryOpts...)
+	})
+	return d.carFactory, d.carErr
+}
+
+func (d *DeviceDetector) getCameraFactory() (*camera.ParserFactory, error) {
+	d.cameraOnce.Do(func() {
+		d.cameraFactory, d.cameraErr = camera.NewParserFactory(d.factoryOpts...)
+	})
+	return d.cameraFactory, d.cameraErr
+}
+
+func (d *DeviceDetector) getMobileFactory() (*mobile.ParserFactory, error) {
+	d.mobileOnce.Do(func() {
+		d.mobileFactory, d.mobileErr = mobile.NewParserFactory(d.factoryOpts...)
+	})
+	return d.mobileFactory, d.mobileErr
 }
 
 // ParseResult contains the parsed detection result with helper methods.
@@ -216,12 +280,14 @@ func (d *DeviceDetector) Parse(ua string, ch *clienthints.ClientHints) *ParseRes
 
 	// Bot detection first
 	if !d.skipBotDetection {
-		if d.discardBotInformation {
-			if d.botFactory.IsBot(ua) {
-				result.bot = &bots.BotMatch{Name: ""}
+		if botFactory, err := d.getBotFactory(); err == nil {
+			if d.discardBotInformation {
+				if botFactory.IsBot(ua) {
+					result.bot = &bots.BotMatch{Name: ""}
+				}
+			} else {
+				result.bot = botFactory.Parse(ua)
 			}
-		} else {
-			result.bot = d.botFactory.Parse(ua)
 		}
 
 		// If bot detected, skip other parsing (PHP behavior)
@@ -234,10 +300,12 @@ func (d *DeviceDetector) Parse(ua string, ch *clienthints.ClientHints) *ParseRes
 	d.parseClient(result, ua, ch)
 
 	// Parse OS
-	if ch != nil {
-		result.os = d.osFactory.Parse(ua, operatingsystem.WithClientHints(ch))
-	} else {
-		result.os = d.osFactory.Parse(ua)
+	if osFactory, err := d.getOSFactory(); err == nil {
+		if ch != nil {
+			result.os = osFactory.Parse(ua, operatingsystem.WithClientHints(ch))
+		} else {
+			result.os = osFactory.Parse(ua)
+		}
 	}
 
 	// Detect device type from device parsers
@@ -253,49 +321,61 @@ func (d *DeviceDetector) Parse(ua string, ch *clienthints.ClientHints) *ParseRes
 // PHP order: HbbTv, ShellTv, Notebook, Console, CarBrowser, Camera, PortableMediaPlayer, Mobile
 func (d *DeviceDetector) detectDevice(result *ParseResult, ua string) {
 	// 1. Try HbbTv (returns TV type if detected)
-	if match := d.hbbtvFactory.NewParser(ua).Parse(); match != nil {
-		result.device = DeviceTypeTV
-		// HbbTv parser doesn't extract brand/model in current implementation
-		return
+	if hbbtvFactory, err := d.getHbbtvFactory(); err == nil {
+		if match := hbbtvFactory.NewParser(ua).Parse(); match != nil {
+			result.device = DeviceTypeTV
+			// HbbTv parser doesn't extract brand/model in current implementation
+			return
+		}
 	}
 
 	// 2. Try ShellTv (returns TV type if detected)
-	if match := d.shelltvFactory.NewParser(ua).Parse(); match != nil {
-		result.device = DeviceTypeTV
-		// ShellTv parser doesn't extract brand/model in current implementation
-		return
+	if shelltvFactory, err := d.getShelltvFactory(); err == nil {
+		if match := shelltvFactory.NewParser(ua).Parse(); match != nil {
+			result.device = DeviceTypeTV
+			// ShellTv parser doesn't extract brand/model in current implementation
+			return
+		}
 	}
 
 	// 3. Try notebook
-	if match := d.notebookFactory.NewParser(ua).Parse(); match != nil {
-		result.device = DeviceTypeFromString(match.Type)
-		result.brand = match.Brand
-		result.model = match.Model
-		return
+	if notebookFactory, err := d.getNotebookFactory(); err == nil {
+		if match := notebookFactory.NewParser(ua).Parse(); match != nil {
+			result.device = DeviceTypeFromString(match.Type)
+			result.brand = match.Brand
+			result.model = match.Model
+			return
+		}
 	}
 
 	// 4. Try console
-	if match := d.consoleFactory.NewParser(ua).Parse(); match != nil {
-		result.device = DeviceTypeFromString(match.Type)
-		result.brand = match.Brand
-		result.model = match.Model
-		return
+	if consoleFactory, err := d.getConsoleFactory(); err == nil {
+		if match := consoleFactory.NewParser(ua).Parse(); match != nil {
+			result.device = DeviceTypeFromString(match.Type)
+			result.brand = match.Brand
+			result.model = match.Model
+			return
+		}
 	}
 
 	// 5. Try car browser
-	if match := d.carFactory.NewParser(ua).Parse(); match != nil {
-		result.device = DeviceTypeFromString(match.Type)
-		result.brand = match.Brand
-		result.model = match.Model
-		return
+	if carFactory, err := d.getCarFactory(); err == nil {
+		if match := carFactory.NewParser(ua).Parse(); match != nil {
+			result.device = DeviceTypeFromString(match.Type)
+			result.brand = match.Brand
+			result.model = match.Model
+			return
+		}
 	}
 
 	// 6. Try camera
-	if match := d.cameraFactory.NewParser(ua).Parse(); match != nil {
-		result.device = DeviceTypeFromString(match.Type)
-		result.brand = match.Brand
-		result.model = match.Model
-		return
+	if cameraFactory, err := d.getCameraFactory(); err == nil {
+		if match := cameraFactory.NewParser(ua).Parse(); match != nil {
+			result.device = DeviceTypeFromString(match.Type)
+			result.brand = match.Brand
+			result.model = match.Model
+			return
+		}
 	}
 
 	// 7. PortableMediaPlayer - TODO: implement when needed
@@ -303,17 +383,19 @@ func (d *DeviceDetector) detectDevice(result *ParseResult, ua string) {
 	// 8. Mobile - handles smartphones, tablets, phablets, feature phones
 	// Skip if this is clearly a desktop browser
 	if !mobile.HasDesktopFragment(ua) {
-		var mobileMatch *mobile.Match
-		if result.clientHints != nil {
-			mobileMatch = d.mobileFactory.NewParser(ua, mobile.WithClientHints(result.clientHints)).Parse()
-		} else {
-			mobileMatch = d.mobileFactory.NewParser(ua).Parse()
-		}
-		if mobileMatch != nil {
-			result.device = DeviceTypeFromString(mobileMatch.Type)
-			result.brand = mobileMatch.Brand
-			result.model = mobileMatch.Model
-			return
+		if mobileFactory, err := d.getMobileFactory(); err == nil {
+			var mobileMatch *mobile.Match
+			if result.clientHints != nil {
+				mobileMatch = mobileFactory.NewParser(ua, mobile.WithClientHints(result.clientHints)).Parse()
+			} else {
+				mobileMatch = mobileFactory.NewParser(ua).Parse()
+			}
+			if mobileMatch != nil {
+				result.device = DeviceTypeFromString(mobileMatch.Type)
+				result.brand = mobileMatch.Brand
+				result.model = mobileMatch.Model
+				return
+			}
 		}
 	}
 
@@ -423,72 +505,84 @@ func (d *DeviceDetector) applyHeuristics(result *ParseResult, ua string) {
 // PHP order: FeedReader, MobileApp, MediaPlayer, PIM, Browser, Library
 func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienthints.ClientHints) {
 	// 1. Try FeedReader
-	if match := d.feedReaderFactory.Parse(ua); match != nil {
-		result.client = &ClientMatch{
-			Type:    match.Type,
-			Name:    match.Name,
-			Version: match.Version,
+	if feedReaderFactory, err := d.getFeedReaderFactory(); err == nil {
+		if match := feedReaderFactory.Parse(ua); match != nil {
+			result.client = &ClientMatch{
+				Type:    match.Type,
+				Name:    match.Name,
+				Version: match.Version,
+			}
+			return
 		}
-		return
 	}
 
 	// 2. Try MobileApp
-	if match := d.mobileAppFactory.Parse(ua); match != nil {
-		result.client = &ClientMatch{
-			Type:    match.Type,
-			Name:    match.Name,
-			Version: match.Version,
+	if mobileAppFactory, err := d.getMobileAppFactory(); err == nil {
+		if match := mobileAppFactory.Parse(ua); match != nil {
+			result.client = &ClientMatch{
+				Type:    match.Type,
+				Name:    match.Name,
+				Version: match.Version,
+			}
+			return
 		}
-		return
 	}
 
 	// 3. Try MediaPlayer
-	if match := d.mediaPlayerFactory.Parse(ua); match != nil {
-		result.client = &ClientMatch{
-			Type:    match.Type,
-			Name:    match.Name,
-			Version: match.Version,
+	if mediaPlayerFactory, err := d.getMediaPlayerFactory(); err == nil {
+		if match := mediaPlayerFactory.Parse(ua); match != nil {
+			result.client = &ClientMatch{
+				Type:    match.Type,
+				Name:    match.Name,
+				Version: match.Version,
+			}
+			return
 		}
-		return
 	}
 
 	// 4. Try PIM
-	if match := d.pimFactory.Parse(ua); match != nil {
-		result.client = &ClientMatch{
-			Type:    match.Type,
-			Name:    match.Name,
-			Version: match.Version,
+	if pimFactory, err := d.getPIMFactory(); err == nil {
+		if match := pimFactory.Parse(ua); match != nil {
+			result.client = &ClientMatch{
+				Type:    match.Type,
+				Name:    match.Name,
+				Version: match.Version,
+			}
+			return
 		}
-		return
 	}
 
 	// 5. Try Browser (with client hints support)
-	var browserMatch *browser.Match
-	if ch != nil {
-		browserMatch = d.browserFactory.Parse(ua, browser.WithClientHints(ch))
-	} else {
-		browserMatch = d.browserFactory.Parse(ua)
-	}
-	if browserMatch != nil {
-		result.client = &ClientMatch{
-			Type:          browserMatch.Type,
-			Name:          browserMatch.Name,
-			Version:       browserMatch.Version,
-			Engine:        browserMatch.Engine,
-			EngineVersion: browserMatch.EngineVersion,
-			Family:        browserMatch.Family,
+	if browserFactory, err := d.getBrowserFactory(); err == nil {
+		var browserMatch *browser.Match
+		if ch != nil {
+			browserMatch = browserFactory.Parse(ua, browser.WithClientHints(ch))
+		} else {
+			browserMatch = browserFactory.Parse(ua)
 		}
-		return
+		if browserMatch != nil {
+			result.client = &ClientMatch{
+				Type:          browserMatch.Type,
+				Name:          browserMatch.Name,
+				Version:       browserMatch.Version,
+				Engine:        browserMatch.Engine,
+				EngineVersion: browserMatch.EngineVersion,
+				Family:        browserMatch.Family,
+			}
+			return
+		}
 	}
 
 	// 6. Try Library
-	if match := d.libraryFactory.Parse(ua); match != nil {
-		result.client = &ClientMatch{
-			Type:    match.Type,
-			Name:    match.Name,
-			Version: match.Version,
+	if libraryFactory, err := d.getLibraryFactory(); err == nil {
+		if match := libraryFactory.Parse(ua); match != nil {
+			result.client = &ClientMatch{
+				Type:    match.Type,
+				Name:    match.Name,
+				Version: match.Version,
+			}
+			return
 		}
-		return
 	}
 }
 

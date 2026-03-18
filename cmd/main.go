@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -137,6 +138,7 @@ func sampleFullMain(args []string) error {
 	nFlag := fs.Int("n", 0, "Number of fixtures to sample (required)")
 	indexOnly := fs.Bool("index-only", false, "Use index-only mode (no full scan fallback)")
 	re2Only := fs.Bool("re2-only", false, "Use RE2-only mode (skip patterns that can't compile with RE2)")
+	metricsFile := fs.String("metrics", "", "Output metrics to JSON file (compatibility, memory, runtime)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -163,11 +165,23 @@ func sampleFullMain(args []string) error {
 		modeDesc = "RE2-only"
 	}
 
+	// Record memory before test
+	runtime.GC()
+	var memBefore runtime.MemStats
+	runtime.ReadMemStats(&memBefore)
+
 	fmt.Printf("Running sampled full integration test (N=%d, mode=%s)...\n", *nFlag, modeDesc)
+	startTime := time.Now()
 	result, err := reporter.CollectFullParseResultsSample(*nFlag, detectorOpts...)
 	if err != nil {
 		return fmt.Errorf("error collecting sample results: %w", err)
 	}
+	elapsed := time.Since(startTime)
+
+	// Record memory after test
+	runtime.GC()
+	var memAfter runtime.MemStats
+	runtime.ReadMemStats(&memAfter)
 
 	total := result.Passed + result.Failed
 	fmt.Printf("\nResults: %d passed, %d failed (%.1f%%)\n",
@@ -175,6 +189,42 @@ func sampleFullMain(args []string) error {
 		result.Failed,
 		result.Percent(),
 	)
+
+	// Print memory and timing stats
+	sysMB := float64(memAfter.Sys) / 1024 / 1024
+	heapAllocMB := float64(memAfter.Alloc) / 1024 / 1024
+
+	fmt.Printf("\nMemory Stats:\n")
+	fmt.Printf("  System Memory (RSS-like): %.2f MB\n", sysMB)
+	fmt.Printf("  Heap In Use: %.2f MB\n", heapAllocMB)
+	fmt.Printf("  GC Runs: %d\n", memAfter.NumGC-memBefore.NumGC)
+	fmt.Printf("  Runtime: %.3fs\n", elapsed.Seconds())
+
+	// Save metrics if requested
+	if *metricsFile != "" {
+		metrics := map[string]interface{}{
+			"mode":      modeDesc,
+			"n":         *nFlag,
+			"timestamp": time.Now().Format(time.RFC3339),
+			"compatibility": map[string]interface{}{
+				"passed":  result.Passed,
+				"failed":  result.Failed,
+				"percent": result.Percent(),
+			},
+			"memory": map[string]interface{}{
+				"system_mb":     sysMB,
+				"heap_inuse_mb": heapAllocMB,
+				"gc_runs":       memAfter.NumGC - memBefore.NumGC,
+			},
+			"runtime_seconds": elapsed.Seconds(),
+		}
+		metricsJSON, _ := json.MarshalIndent(metrics, "", "  ")
+		if err := os.WriteFile(*metricsFile, metricsJSON, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to write metrics file: %v\n", err)
+		} else {
+			fmt.Printf("\nMetrics saved to: %s\n", *metricsFile)
+		}
+	}
 
 	if result.Failed > 0 {
 		fmt.Printf("\nFirst %d failures:\n", len(result.Failures))

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -694,4 +695,132 @@ func TestDetectDeviceTypeFromFormFactors(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestParseClientBrowserAppIDShortcut(t *testing.T) {
+	dd, err := New()
+	require.NoError(t, err)
+
+	ua := "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+	ch := clienthints.Factory(map[string]interface{}{
+		"x-requested-with": "com.microsoft.emmx",
+	})
+
+	result := dd.Parse(ua, ch)
+	client := result.GetClient()
+	require.NotNil(t, client)
+	assert.Equal(t, "browser", client.Type)
+	assert.Equal(t, "Microsoft Edge", client.Name)
+}
+
+func TestParseClientMobileAppAppIDShortcut(t *testing.T) {
+	dd, err := New()
+	require.NoError(t, err)
+
+	ua := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+	ch := clienthints.Factory(map[string]interface{}{
+		"x-requested-with": "com.instagram.android",
+	})
+
+	result := dd.Parse(ua, ch)
+	client := result.GetClient()
+	require.NotNil(t, client)
+	assert.Equal(t, "mobile app", client.Type)
+	assert.Equal(t, "Instagram", client.Name)
+	assert.Equal(t, "", client.Version)
+}
+
+func TestClientParserPositiveGates(t *testing.T) {
+	testCases := []struct {
+		name string
+		gate func(string) bool
+		ua   string
+		want bool
+	}{
+		{
+			name: "feed reader positive",
+			gate: shouldTryFeedReaderParser,
+			ua:   "NewsBlur/1.0",
+			want: true,
+		},
+		{
+			name: "feed reader reeder positive",
+			gate: shouldTryFeedReaderParser,
+			ua:   "Reeder/5.4",
+			want: true,
+		},
+		{
+			name: "feed reader negative",
+			gate: shouldTryFeedReaderParser,
+			ua:   "Mozilla/5.0",
+			want: false,
+		},
+		{
+			name: "media player positive",
+			gate: shouldTryMediaPlayerParser,
+			ua:   "VLC/3.0.20 LibVLC/3.0.20",
+			want: true,
+		},
+		{
+			name: "media player substream positive",
+			gate: shouldTryMediaPlayerParser,
+			ua:   "SubStream/0.7",
+			want: true,
+		},
+		{
+			name: "media player negative",
+			gate: shouldTryMediaPlayerParser,
+			ua:   "Mozilla/5.0",
+			want: false,
+		},
+		{
+			name: "pim positive",
+			gate: shouldTryPIMParser,
+			ua:   "Mozilla/5.0 Thunderbird/115.0",
+			want: true,
+		},
+		{
+			name: "pim spicebird positive",
+			gate: shouldTryPIMParser,
+			ua:   "Spicebird/0.7.1",
+			want: true,
+		},
+		{
+			name: "pim negative",
+			gate: shouldTryPIMParser,
+			ua:   "Mozilla/5.0",
+			want: false,
+		},
+		{
+			name: "library positive",
+			gate: shouldTryLibraryParser,
+			ua:   "curl/8.5.0",
+			want: true,
+		},
+		{
+			name: "library safari view service positive",
+			gate: shouldTryLibraryParser,
+			ua:   "SafariViewService/8612.3.10.0.7 CFNetwork/1410.0.3 Darwin/22.6.0",
+			want: true,
+		},
+		{
+			name: "library negative",
+			gate: shouldTryLibraryParser,
+			ua:   "Mozilla/5.0",
+			want: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.gate(strings.ToLower(tc.ua)))
+		})
+	}
+
+	assert.True(t, shouldTryMobileAppParser(strings.ToLower("Dalvik/2.1.0"), ""))
+	assert.True(t, shouldTryMobileAppParser(strings.ToLower("Mozilla/5.0 (iPhone) GSA/301.0"), ""))
+	assert.True(t, shouldTryMobileAppParser(strings.ToLower("Mozilla/5.0 (iPhone) WhatsApp/2.23"), ""))
+	assert.True(t, shouldTryMobileAppParser(strings.ToLower("Mozilla/5.0 FBAN/FBIOS"), ""))
+	assert.True(t, shouldTryMobileAppParser(strings.ToLower("Mozilla/5.0"), "com.instagram.android"))
+	assert.False(t, shouldTryMobileAppParser(strings.ToLower("Mozilla/5.0"), ""))
 }

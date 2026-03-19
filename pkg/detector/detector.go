@@ -51,13 +51,19 @@ type DeviceDetector struct {
 	pimOnce    sync.Once
 	pimErr     error
 
-	browserFactory *browser.ParserFactory
-	browserOnce    sync.Once
-	browserErr     error
+	browserFactory   *browser.ParserFactory
+	browserOnce      sync.Once
+	browserErr       error
+	browserHints     *browser.BrowserHints
+	browserHintsOnce sync.Once
+	browserHintsErr  error
 
-	libraryFactory *library.ParserFactory
-	libraryOnce    sync.Once
-	libraryErr     error
+	libraryFactory     *library.ParserFactory
+	libraryOnce        sync.Once
+	libraryErr         error
+	mobileAppHints     *mobileapp.AppHints
+	mobileAppHintsOnce sync.Once
+	mobileAppHintsErr  error
 
 	// Device parser factories
 	hbbtvFactory *hbbtv.ParserFactory
@@ -199,11 +205,25 @@ func (d *DeviceDetector) getBrowserFactory() (*browser.ParserFactory, error) {
 	return d.browserFactory, d.browserErr
 }
 
+func (d *DeviceDetector) getBrowserHints() (*browser.BrowserHints, error) {
+	d.browserHintsOnce.Do(func() {
+		d.browserHints, d.browserHintsErr = browser.NewBrowserHints()
+	})
+	return d.browserHints, d.browserHintsErr
+}
+
 func (d *DeviceDetector) getLibraryFactory() (*library.ParserFactory, error) {
 	d.libraryOnce.Do(func() {
 		d.libraryFactory, d.libraryErr = library.NewParserFactory(d.factoryOpts...)
 	})
 	return d.libraryFactory, d.libraryErr
+}
+
+func (d *DeviceDetector) getMobileAppHints() (*mobileapp.AppHints, error) {
+	d.mobileAppHintsOnce.Do(func() {
+		d.mobileAppHints, d.mobileAppHintsErr = mobileapp.NewAppHints()
+	})
+	return d.mobileAppHints, d.mobileAppHintsErr
 }
 
 func (d *DeviceDetector) getHbbtvFactory() (*hbbtv.ParserFactory, error) {
@@ -501,58 +521,121 @@ func (d *DeviceDetector) applyHeuristics(result *ParseResult, ua string) {
 	}
 }
 
-// parseClient tries all client parsers in PHP order.
-// PHP order: FeedReader, MobileApp, MediaPlayer, PIM, Browser, Library
-func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienthints.ClientHints) {
-	// 1. Try FeedReader
-	if feedReaderFactory, err := d.getFeedReaderFactory(); err == nil {
-		if match := feedReaderFactory.Parse(ua); match != nil {
-			result.client = &ClientMatch{
-				Type:    match.Type,
-				Name:    match.Name,
-				Version: match.Version,
-			}
-			return
+var feedReaderGateTokens = []string{
+	"feed",
+	"rss",
+	"newsblur",
+	"inoreader",
+	"feedly",
+	"feeder",
+	"reeder/",
+	"goodpods/",
+}
+
+var mobileAppGateTokens = []string{
+	"amazon;aft",
+	"aliapp(",
+	"cfnetwork/",
+	" okhttp",
+	" okhttp/",
+	"dalvik/",
+	"fban/",
+	"fbios/",
+	"micromessenger/",
+	"fb_iab",
+	"instagram",
+	"instabridge/",
+	"line/",
+	"gsa/",
+	"whatsapp/",
+	"pandora/",
+	"tivimate/",
+	"podkast",
+	"podkicker",
+	"player fm",
+	";appver:",
+	"microsoft office word/",
+	"ns/",
+	"yjapp-",
+	"; wv",
+	" wv)",
+}
+
+var mediaPlayerGateTokens = []string{
+	"vlc",
+	"mediaplayer",
+	"mpv",
+	"foobar2000",
+	"player/",
+	"itunes",
+	"substream/",
+}
+
+var pimGateTokens = []string{
+	"outlook",
+	"thunderbird",
+	"evolution",
+	"mailspring",
+	"lotus-notes",
+	"kontact",
+	"spicebird/",
+}
+
+var libraryGateTokens = []string{
+	"curl/",
+	"wget/",
+	"python-requests",
+	"go-http-client",
+	"okhttp",
+	"guzzlehttp",
+	"apache-httpclient",
+	"postmanruntime",
+	"java/",
+	"libwww-perl",
+	"safariviewservice/",
+}
+
+func containsAnyLower(uaLower string, tokens []string) bool {
+	for _, token := range tokens {
+		if strings.Contains(uaLower, token) {
+			return true
 		}
 	}
+	return false
+}
 
-	// 2. Try MobileApp
-	if mobileAppFactory, err := d.getMobileAppFactory(); err == nil {
-		if match := mobileAppFactory.Parse(ua); match != nil {
-			result.client = &ClientMatch{
-				Type:    match.Type,
-				Name:    match.Name,
-				Version: match.Version,
-			}
-			return
-		}
+func shouldTryFeedReaderParser(uaLower string) bool {
+	return containsAnyLower(uaLower, feedReaderGateTokens)
+}
+
+func shouldTryMobileAppParser(uaLower, appID string) bool {
+	if appID != "" {
+		return true
 	}
+	return containsAnyLower(uaLower, mobileAppGateTokens)
+}
 
-	// 3. Try MediaPlayer
-	if mediaPlayerFactory, err := d.getMediaPlayerFactory(); err == nil {
-		if match := mediaPlayerFactory.Parse(ua); match != nil {
-			result.client = &ClientMatch{
-				Type:    match.Type,
-				Name:    match.Name,
-				Version: match.Version,
-			}
-			return
-		}
+func shouldTryMediaPlayerParser(uaLower string) bool {
+	return containsAnyLower(uaLower, mediaPlayerGateTokens)
+}
+
+func shouldTryPIMParser(uaLower string) bool {
+	return containsAnyLower(uaLower, pimGateTokens)
+}
+
+func shouldTryLibraryParser(uaLower string) bool {
+	return containsAnyLower(uaLower, libraryGateTokens)
+}
+
+func setSimpleClientMatch(result *ParseResult, clientType, name, version string) {
+	result.client = &ClientMatch{
+		Type:    clientType,
+		Name:    name,
+		Version: version,
 	}
+}
 
-	// 4. Try PIM
-	if pimFactory, err := d.getPIMFactory(); err == nil {
-		if match := pimFactory.Parse(ua); match != nil {
-			result.client = &ClientMatch{
-				Type:    match.Type,
-				Name:    match.Name,
-				Version: match.Version,
-			}
-			return
-		}
-	}
-
-	// 5. Try Browser (with client hints support)
+func (d *DeviceDetector) tryParseBrowser(result *ParseResult, ua string, ch *clienthints.ClientHints) {
 	if browserFactory, err := d.getBrowserFactory(); err == nil {
 		var browserMatch *browser.Match
 		if ch != nil {
@@ -569,19 +652,86 @@ func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienth
 				EngineVersion: browserMatch.EngineVersion,
 				Family:        browserMatch.Family,
 			}
-			return
+		}
+	}
+}
+
+// parseClient tries all client parsers in PHP order.
+// PHP order: FeedReader, MobileApp, MediaPlayer, PIM, Browser, Library
+func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienthints.ClientHints) {
+	uaLower := strings.ToLower(ua)
+	appID := ""
+	if ch != nil {
+		appID = strings.TrimSpace(ch.GetApp())
+	}
+
+	browserShortcut := false
+	if appID != "" {
+		if browserHints, err := d.getBrowserHints(); err == nil && browserHints.GetBrowserName(appID) != "" {
+			browserShortcut = true
+		} else if appHints, appErr := d.getMobileAppHints(); appErr == nil {
+			if appName := appHints.GetAppName(appID); appName != "" {
+				setSimpleClientMatch(result, "mobile app", appName, "")
+				return
+			}
 		}
 	}
 
-	// 6. Try Library
-	if libraryFactory, err := d.getLibraryFactory(); err == nil {
-		if match := libraryFactory.Parse(ua); match != nil {
-			result.client = &ClientMatch{
-				Type:    match.Type,
-				Name:    match.Name,
-				Version: match.Version,
+	if !browserShortcut {
+		// 1. Try FeedReader
+		if shouldTryFeedReaderParser(uaLower) {
+			if feedReaderFactory, err := d.getFeedReaderFactory(); err == nil {
+				if match := feedReaderFactory.Parse(ua); match != nil {
+					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
+					return
+				}
 			}
-			return
+		}
+
+		// 2. Try MobileApp
+		if shouldTryMobileAppParser(uaLower, appID) {
+			if mobileAppFactory, err := d.getMobileAppFactory(); err == nil {
+				if match := mobileAppFactory.Parse(ua); match != nil {
+					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
+					return
+				}
+			}
+		}
+
+		// 3. Try MediaPlayer
+		if shouldTryMediaPlayerParser(uaLower) {
+			if mediaPlayerFactory, err := d.getMediaPlayerFactory(); err == nil {
+				if match := mediaPlayerFactory.Parse(ua); match != nil {
+					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
+					return
+				}
+			}
+		}
+
+		// 4. Try PIM
+		if shouldTryPIMParser(uaLower) {
+			if pimFactory, err := d.getPIMFactory(); err == nil {
+				if match := pimFactory.Parse(ua); match != nil {
+					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
+					return
+				}
+			}
+		}
+	}
+
+	// 5. Try Browser (with client hints support)
+	d.tryParseBrowser(result, ua, ch)
+	if result.client != nil {
+		return
+	}
+
+	// 6. Try Library
+	if shouldTryLibraryParser(uaLower) {
+		if libraryFactory, err := d.getLibraryFactory(); err == nil {
+			if match := libraryFactory.Parse(ua); match != nil {
+				setSimpleClientMatch(result, match.Type, match.Name, match.Version)
+				return
+			}
 		}
 	}
 }

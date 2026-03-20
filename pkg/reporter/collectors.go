@@ -1409,6 +1409,10 @@ func CollectFullParseResultsSample(n int, detectorOpts ...detector.Option) (Pars
 		}
 
 		parsed := dd.Parse(tc.fixture.UserAgent, ch)
+		if result.Stats == nil {
+			result.Stats = &ResultStats{}
+		}
+		result.Stats.ClientParsers.Add(parsed.GetClientParserStats())
 		info := parsed.GetFullInfo()
 
 		// Extract expected values

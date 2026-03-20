@@ -139,6 +139,7 @@ func sampleFullMain(args []string) error {
 	indexOnly := fs.Bool("index-only", false, "Use index-only mode (no full scan fallback)")
 	re2Only := fs.Bool("re2-only", false, "Use RE2-only mode (skip patterns that can't compile with RE2)")
 	metricsFile := fs.String("metrics", "", "Output metrics to JSON file (compatibility, memory, runtime)")
+	clientParserGating := fs.String("client-parser-gating", "full", "Client parser gating mode: full, exact-only, off")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -155,6 +156,16 @@ func sampleFullMain(args []string) error {
 	if *re2Only {
 		detectorOpts = append(detectorOpts, detector.WithRe2Only())
 	}
+	switch *clientParserGating {
+	case "full":
+		detectorOpts = append(detectorOpts, detector.WithClientParserGating(detector.ClientParserGatingFull))
+	case "exact-only":
+		detectorOpts = append(detectorOpts, detector.WithClientParserGating(detector.ClientParserGatingExactOnly))
+	case "off":
+		detectorOpts = append(detectorOpts, detector.WithClientParserGating(detector.ClientParserGatingDisabled))
+	default:
+		return fmt.Errorf("invalid -client-parser-gating value %q (expected full, exact-only, off)", *clientParserGating)
+	}
 
 	modeDesc := "full compatibility"
 	if *indexOnly && *re2Only {
@@ -163,6 +174,9 @@ func sampleFullMain(args []string) error {
 		modeDesc = "index-only"
 	} else if *re2Only {
 		modeDesc = "RE2-only"
+	}
+	if *clientParserGating != "full" {
+		modeDesc += ", client-parser-gating=" + *clientParserGating
 	}
 
 	// Record memory before test
@@ -199,6 +213,7 @@ func sampleFullMain(args []string) error {
 	fmt.Printf("  Heap In Use: %.2f MB\n", heapAllocMB)
 	fmt.Printf("  GC Runs: %d\n", memAfter.NumGC-memBefore.NumGC)
 	fmt.Printf("  Runtime: %.3fs\n", elapsed.Seconds())
+	printClientParserStats(result.Stats)
 
 	// Save metrics if requested
 	if *metricsFile != "" {
@@ -217,6 +232,9 @@ func sampleFullMain(args []string) error {
 				"gc_runs":       memAfter.NumGC - memBefore.NumGC,
 			},
 			"runtime_seconds": elapsed.Seconds(),
+		}
+		if result.Stats != nil {
+			metrics["stats"] = result.Stats
 		}
 		metricsJSON, _ := json.MarshalIndent(metrics, "", "  ")
 		if err := os.WriteFile(*metricsFile, metricsJSON, 0644); err != nil {
@@ -243,6 +261,24 @@ func sampleFullMain(args []string) error {
 	return nil
 }
 
+func printClientParserStats(stats *reporter.ResultStats) {
+	if stats == nil {
+		return
+	}
+
+	fmt.Printf("\nClient Parser Stats:\n")
+	printClientParserCounter("FeedReader", stats.ClientParsers.FeedReader)
+	printClientParserCounter("MobileApp", stats.ClientParsers.MobileApp)
+	printClientParserCounter("MediaPlayer", stats.ClientParsers.MediaPlayer)
+	printClientParserCounter("PIM", stats.ClientParsers.PIM)
+	printClientParserCounter("Browser", stats.ClientParsers.Browser)
+	printClientParserCounter("Library", stats.ClientParsers.Library)
+}
+
+func printClientParserCounter(name string, counter detector.ClientParserCounter) {
+	fmt.Printf("  %-12s attempts=%4d successes=%4d\n", name, counter.Attempts, counter.Successes)
+}
+
 func serveMain(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -250,6 +286,7 @@ func serveMain(args []string) error {
 	path := fs.String("path", "/detect", "HTTP path for detection endpoint")
 	indexOnly := fs.Bool("index-only", false, "Use index-only mode (no full scan fallback)")
 	re2Only := fs.Bool("re2-only", false, "Use RE2-only mode (skip patterns that can't compile with RE2)")
+	clientParserGating := fs.String("client-parser-gating", "full", "Client parser gating mode: full, exact-only, off")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -260,6 +297,16 @@ func serveMain(args []string) error {
 	}
 	if *re2Only {
 		detectorOpts = append(detectorOpts, detector.WithRe2Only())
+	}
+	switch *clientParserGating {
+	case "full":
+		detectorOpts = append(detectorOpts, detector.WithClientParserGating(detector.ClientParserGatingFull))
+	case "exact-only":
+		detectorOpts = append(detectorOpts, detector.WithClientParserGating(detector.ClientParserGatingExactOnly))
+	case "off":
+		detectorOpts = append(detectorOpts, detector.WithClientParserGating(detector.ClientParserGatingDisabled))
+	default:
+		return fmt.Errorf("invalid -client-parser-gating value %q (expected full, exact-only, off)", *clientParserGating)
 	}
 
 	dd, err := detector.New(detectorOpts...)

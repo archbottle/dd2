@@ -97,6 +97,7 @@ type DeviceDetector struct {
 	// Configuration
 	skipBotDetection      bool
 	discardBotInformation bool
+	clientParserGating    ClientParserGatingMode
 
 	// Factory options to propagate to all parser factories
 	factoryOpts []common.FactoryOption
@@ -104,6 +105,79 @@ type DeviceDetector struct {
 
 // Option configures the DeviceDetector.
 type Option func(*DeviceDetector)
+
+// Client parser names used for per-parse stats.
+const (
+	ClientParserFeedReader  = "feed_reader"
+	ClientParserMobileApp   = "mobile_app"
+	ClientParserMediaPlayer = "media_player"
+	ClientParserPIM         = "pim"
+	ClientParserBrowser     = "browser"
+	ClientParserLibrary     = "library"
+)
+
+// ClientParserCounter tracks parser attempts and successes.
+type ClientParserCounter struct {
+	Attempts  int `json:"attempts"`
+	Successes int `json:"successes"`
+}
+
+// ClientParserStats stores counters for each client parser family.
+type ClientParserStats struct {
+	FeedReader  ClientParserCounter `json:"feed_reader"`
+	MobileApp   ClientParserCounter `json:"mobile_app"`
+	MediaPlayer ClientParserCounter `json:"media_player"`
+	PIM         ClientParserCounter `json:"pim"`
+	Browser     ClientParserCounter `json:"browser"`
+	Library     ClientParserCounter `json:"library"`
+}
+
+// Add merges another stats snapshot into s.
+func (s *ClientParserStats) Add(other ClientParserStats) {
+	s.FeedReader.Attempts += other.FeedReader.Attempts
+	s.FeedReader.Successes += other.FeedReader.Successes
+	s.MobileApp.Attempts += other.MobileApp.Attempts
+	s.MobileApp.Successes += other.MobileApp.Successes
+	s.MediaPlayer.Attempts += other.MediaPlayer.Attempts
+	s.MediaPlayer.Successes += other.MediaPlayer.Successes
+	s.PIM.Attempts += other.PIM.Attempts
+	s.PIM.Successes += other.PIM.Successes
+	s.Browser.Attempts += other.Browser.Attempts
+	s.Browser.Successes += other.Browser.Successes
+	s.Library.Attempts += other.Library.Attempts
+	s.Library.Successes += other.Library.Successes
+}
+
+func (s *ClientParserStats) counter(name string) *ClientParserCounter {
+	switch name {
+	case ClientParserFeedReader:
+		return &s.FeedReader
+	case ClientParserMobileApp:
+		return &s.MobileApp
+	case ClientParserMediaPlayer:
+		return &s.MediaPlayer
+	case ClientParserPIM:
+		return &s.PIM
+	case ClientParserBrowser:
+		return &s.Browser
+	case ClientParserLibrary:
+		return &s.Library
+	default:
+		return nil
+	}
+}
+
+// ClientParserGatingMode controls parseClient shortcuts and heuristic gates.
+type ClientParserGatingMode int
+
+const (
+	// ClientParserGatingFull enables exact app-id shortcuts and heuristic parser gates.
+	ClientParserGatingFull ClientParserGatingMode = iota
+	// ClientParserGatingExactOnly enables only exact app-id shortcuts.
+	ClientParserGatingExactOnly
+	// ClientParserGatingDisabled disables parseClient shortcuts and heuristic gates.
+	ClientParserGatingDisabled
+)
 
 // WithSkipBotDetection skips bot detection.
 func WithSkipBotDetection() Option {
@@ -116,6 +190,13 @@ func WithSkipBotDetection() Option {
 func WithDiscardBotInformation() Option {
 	return func(d *DeviceDetector) {
 		d.discardBotInformation = true
+	}
+}
+
+// WithClientParserGating sets parseClient gating behavior.
+func WithClientParserGating(mode ClientParserGatingMode) Option {
+	return func(d *DeviceDetector) {
+		d.clientParserGating = mode
 	}
 }
 
@@ -142,7 +223,7 @@ func WithFactoryOptions(opts ...common.FactoryOption) Option {
 
 // New creates a new DeviceDetector. All parsers are loaded lazily on first use.
 func New(opts ...Option) (*DeviceDetector, error) {
-	d := &DeviceDetector{}
+	d := &DeviceDetector{clientParserGating: ClientParserGatingFull}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -284,6 +365,7 @@ type ParseResult struct {
 	client *ClientMatch
 	os     *operatingsystem.Match
 	device DeviceType
+	stats  ClientParserStats
 
 	// Brand and model from device detection
 	brand string
@@ -627,6 +709,18 @@ func shouldTryLibraryParser(uaLower string) bool {
 	return containsAnyLower(uaLower, libraryGateTokens)
 }
 
+func (r *ParseResult) recordClientParserAttempt(name string) {
+	if counter := r.stats.counter(name); counter != nil {
+		counter.Attempts++
+	}
+}
+
+func (r *ParseResult) recordClientParserSuccess(name string) {
+	if counter := r.stats.counter(name); counter != nil {
+		counter.Successes++
+	}
+}
+
 func setSimpleClientMatch(result *ParseResult, clientType, name, version string) {
 	result.client = &ClientMatch{
 		Type:    clientType,
@@ -636,6 +730,7 @@ func setSimpleClientMatch(result *ParseResult, clientType, name, version string)
 }
 
 func (d *DeviceDetector) tryParseBrowser(result *ParseResult, ua string, ch *clienthints.ClientHints) {
+	result.recordClientParserAttempt(ClientParserBrowser)
 	if browserFactory, err := d.getBrowserFactory(); err == nil {
 		var browserMatch *browser.Match
 		if ch != nil {
@@ -644,6 +739,7 @@ func (d *DeviceDetector) tryParseBrowser(result *ParseResult, ua string, ch *cli
 			browserMatch = browserFactory.Parse(ua)
 		}
 		if browserMatch != nil {
+			result.recordClientParserSuccess(ClientParserBrowser)
 			result.client = &ClientMatch{
 				Type:          browserMatch.Type,
 				Name:          browserMatch.Name,
@@ -661,16 +757,20 @@ func (d *DeviceDetector) tryParseBrowser(result *ParseResult, ua string, ch *cli
 func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienthints.ClientHints) {
 	uaLower := strings.ToLower(ua)
 	appID := ""
+	useExactShortcuts := d.clientParserGating != ClientParserGatingDisabled
+	useHeuristicGates := d.clientParserGating == ClientParserGatingFull
 	if ch != nil {
 		appID = strings.TrimSpace(ch.GetApp())
 	}
 
 	browserShortcut := false
-	if appID != "" {
+	if useExactShortcuts && appID != "" {
 		if browserHints, err := d.getBrowserHints(); err == nil && browserHints.GetBrowserName(appID) != "" {
 			browserShortcut = true
 		} else if appHints, appErr := d.getMobileAppHints(); appErr == nil {
 			if appName := appHints.GetAppName(appID); appName != "" {
+				result.recordClientParserAttempt(ClientParserMobileApp)
+				result.recordClientParserSuccess(ClientParserMobileApp)
 				setSimpleClientMatch(result, "mobile app", appName, "")
 				return
 			}
@@ -679,9 +779,11 @@ func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienth
 
 	if !browserShortcut {
 		// 1. Try FeedReader
-		if shouldTryFeedReaderParser(uaLower) {
+		if !useHeuristicGates || shouldTryFeedReaderParser(uaLower) {
+			result.recordClientParserAttempt(ClientParserFeedReader)
 			if feedReaderFactory, err := d.getFeedReaderFactory(); err == nil {
 				if match := feedReaderFactory.Parse(ua); match != nil {
+					result.recordClientParserSuccess(ClientParserFeedReader)
 					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
 					return
 				}
@@ -689,9 +791,11 @@ func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienth
 		}
 
 		// 2. Try MobileApp
-		if shouldTryMobileAppParser(uaLower, appID) {
+		if !useHeuristicGates || shouldTryMobileAppParser(uaLower, appID) {
+			result.recordClientParserAttempt(ClientParserMobileApp)
 			if mobileAppFactory, err := d.getMobileAppFactory(); err == nil {
 				if match := mobileAppFactory.Parse(ua); match != nil {
+					result.recordClientParserSuccess(ClientParserMobileApp)
 					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
 					return
 				}
@@ -699,9 +803,11 @@ func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienth
 		}
 
 		// 3. Try MediaPlayer
-		if shouldTryMediaPlayerParser(uaLower) {
+		if !useHeuristicGates || shouldTryMediaPlayerParser(uaLower) {
+			result.recordClientParserAttempt(ClientParserMediaPlayer)
 			if mediaPlayerFactory, err := d.getMediaPlayerFactory(); err == nil {
 				if match := mediaPlayerFactory.Parse(ua); match != nil {
+					result.recordClientParserSuccess(ClientParserMediaPlayer)
 					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
 					return
 				}
@@ -709,9 +815,11 @@ func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienth
 		}
 
 		// 4. Try PIM
-		if shouldTryPIMParser(uaLower) {
+		if !useHeuristicGates || shouldTryPIMParser(uaLower) {
+			result.recordClientParserAttempt(ClientParserPIM)
 			if pimFactory, err := d.getPIMFactory(); err == nil {
 				if match := pimFactory.Parse(ua); match != nil {
+					result.recordClientParserSuccess(ClientParserPIM)
 					setSimpleClientMatch(result, match.Type, match.Name, match.Version)
 					return
 				}
@@ -726,9 +834,11 @@ func (d *DeviceDetector) parseClient(result *ParseResult, ua string, ch *clienth
 	}
 
 	// 6. Try Library
-	if shouldTryLibraryParser(uaLower) {
+	if !useHeuristicGates || shouldTryLibraryParser(uaLower) {
+		result.recordClientParserAttempt(ClientParserLibrary)
 		if libraryFactory, err := d.getLibraryFactory(); err == nil {
 			if match := libraryFactory.Parse(ua); match != nil {
+				result.recordClientParserSuccess(ClientParserLibrary)
 				setSimpleClientMatch(result, match.Type, match.Name, match.Version)
 				return
 			}
@@ -824,6 +934,11 @@ func (r *ParseResult) GetBot() *bots.BotMatch {
 // GetClient returns the client info.
 func (r *ParseResult) GetClient() *ClientMatch {
 	return r.client
+}
+
+// GetClientParserStats returns per-parser client parsing counters for this parse.
+func (r *ParseResult) GetClientParserStats() ClientParserStats {
+	return r.stats
 }
 
 // GetOS returns the OS info.

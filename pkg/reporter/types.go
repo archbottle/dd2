@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/archbottle/dd2/pkg/detector"
 )
 
 // FieldDiff represents the comparison of a single field
@@ -37,6 +39,12 @@ type ParserResult struct {
 	Passed   int           `json:"passed"`
 	Failed   int           `json:"failed"`
 	Failures []TestFailure `json:"failures,omitempty"`
+	Stats    *ResultStats  `json:"stats,omitempty"`
+}
+
+// ResultStats contains extra aggregated metrics for a collector run.
+type ResultStats struct {
+	ClientParsers detector.ClientParserStats `json:"client_parsers"`
 }
 
 // Percent returns the pass percentage for this parser

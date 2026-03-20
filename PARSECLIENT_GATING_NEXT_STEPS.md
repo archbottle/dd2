@@ -8,16 +8,21 @@ Current prototype result on the clean `optimization-round` base:
 
 ## What this branch does
 
-- Adds exact app-id shortcuts before the normal parser chain:
+- Adds configurable exact app-id shortcuts before the normal parser chain:
   - browser app-id -> jump straight to browser parsing
   - mobile app app-id -> return mobile app immediately
-- Adds positive-token gates before these parsers:
+- Adds positive-token gates before these parsers when full gating is enabled:
   - `FeedReader`
   - `MobileApp`
   - `MediaPlayer`
   - `PIM`
   - `Library`
 - Keeps `Browser` always running in its normal order slot.
+
+Current modes exposed through `detector.WithClientParserGating(...)`:
+- `ClientParserGatingFull` - exact shortcuts plus heuristic parser gates (current default on this branch)
+- `ClientParserGatingExactOnly` - exact app-id shortcuts only
+- `ClientParserGatingDisabled` - original parser chain with no gating shortcuts
 
 ## Why this needs cleanup before rollout
 
@@ -52,12 +57,13 @@ Current prototype result on the clean `optimization-round` base:
   - UA substring gates
 - Treat these as different layers so they can be measured and tuned independently.
 
-5. Add a safe rollout switch
-- Consider a detector option such as `WithClientParserGating()`.
-- Make it easy to compare:
+5. Use the rollout switch to compare modes cleanly
+- The branch now has `WithClientParserGating(...)`.
+- Use it to compare:
   - no gating
   - exact-hint-only gating
   - full heuristic gating
+- Keep future experiments measurable by mode instead of mixing behavior behind the default path.
 
 6. Audit false negatives systematically
 - Re-run sampled compatibility on multiple seeds and larger sizes.
@@ -76,7 +82,7 @@ Current prototype result on the clean `optimization-round` base:
 
 1. Add per-parser counters and compare 500, 2000, and warm-run measurements.
 2. Extract gating helpers into dedicated files without changing behavior.
-3. Add an option flag to enable or disable gating.
+3. Add CLI flags so sampled runs can switch gating mode without code edits.
 4. Compare exact-hint-only gating against full heuristic gating.
 5. If mobile app remains expensive, add parser-owned fast-paths instead of more detector token growth.
 

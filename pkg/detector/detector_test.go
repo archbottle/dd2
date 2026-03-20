@@ -730,6 +730,84 @@ func TestParseClientMobileAppAppIDShortcut(t *testing.T) {
 	assert.Equal(t, "", client.Version)
 }
 
+func TestParseClientExactOnlyModeUsesAppIDShortcuts(t *testing.T) {
+	dd, err := New(WithClientParserGating(ClientParserGatingExactOnly))
+	require.NoError(t, err)
+
+	ua := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+	ch := clienthints.Factory(map[string]interface{}{
+		"x-requested-with": "com.instagram.android",
+	})
+
+	result := dd.Parse(ua, ch)
+	client := result.GetClient()
+	require.NotNil(t, client)
+	assert.Equal(t, "mobile app", client.Type)
+	assert.Equal(t, "Instagram", client.Name)
+}
+
+func TestParseClientDisabledGatingFallsBackToFullParserChain(t *testing.T) {
+	dd, err := New(WithClientParserGating(ClientParserGatingDisabled))
+	require.NoError(t, err)
+
+	ua := "Instagram 155.0.0.37.107 Android"
+	ch := clienthints.Factory(map[string]interface{}{
+		"x-requested-with": "com.instagram.android",
+	})
+
+	result := dd.Parse(ua, ch)
+	client := result.GetClient()
+	require.NotNil(t, client)
+	assert.Equal(t, "mobile app", client.Type)
+	assert.Equal(t, "Instagram", client.Name)
+	assert.Equal(t, "155.0.0.37.107", client.Version)
+}
+
+func TestParseClientStatsTrackShortcutAndParserAttempts(t *testing.T) {
+	t.Run("app shortcut increments mobile app success", func(t *testing.T) {
+		dd, err := New(WithClientParserGating(ClientParserGatingExactOnly))
+		require.NoError(t, err)
+
+		ua := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36"
+		ch := clienthints.Factory(map[string]interface{}{
+			"x-requested-with": "com.instagram.android",
+		})
+
+		stats := dd.Parse(ua, ch).GetClientParserStats()
+		assert.Equal(t, 1, stats.MobileApp.Attempts)
+		assert.Equal(t, 1, stats.MobileApp.Successes)
+		assert.Equal(t, 0, stats.Browser.Attempts)
+	})
+
+	t.Run("browser path records only browser attempt when gated", func(t *testing.T) {
+		dd, err := New(WithClientParserGating(ClientParserGatingFull))
+		require.NoError(t, err)
+
+		ua := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+		stats := dd.Parse(ua, nil).GetClientParserStats()
+		assert.Equal(t, 0, stats.FeedReader.Attempts)
+		assert.Equal(t, 0, stats.MobileApp.Attempts)
+		assert.Equal(t, 0, stats.MediaPlayer.Attempts)
+		assert.Equal(t, 0, stats.PIM.Attempts)
+		assert.Equal(t, 1, stats.Browser.Attempts)
+		assert.Equal(t, 1, stats.Browser.Successes)
+	})
+
+	t.Run("disabled gating records pre-browser parser attempts", func(t *testing.T) {
+		dd, err := New(WithClientParserGating(ClientParserGatingDisabled))
+		require.NoError(t, err)
+
+		ua := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+		stats := dd.Parse(ua, nil).GetClientParserStats()
+		assert.Equal(t, 1, stats.FeedReader.Attempts)
+		assert.Equal(t, 1, stats.MobileApp.Attempts)
+		assert.Equal(t, 1, stats.MediaPlayer.Attempts)
+		assert.Equal(t, 1, stats.PIM.Attempts)
+		assert.Equal(t, 1, stats.Browser.Attempts)
+		assert.Equal(t, 1, stats.Browser.Successes)
+	})
+}
+
 func TestClientParserPositiveGates(t *testing.T) {
 	testCases := []struct {
 		name string
